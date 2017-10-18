@@ -409,7 +409,22 @@ typedef struct OMX_PARAM_COMPONENTROLETYPE {
  */
 #define OMX_BUFFERFLAG_CODECCONFIG 0x00000080
 
+#ifdef MTK_HARDWARE
+// <--- Morris Yang 20110322 add for RV resizing
+#define OMX_BUFFERFLAG_SPECIFYRESOLUTION 0x00000100
 
+// for invalid pts file
+#define OMX_BUFFERFLAG_INVALID_TIMESTAMP 0x00000800
+
+// for Secure video playback
+#define OMX_BUFFERFLAG_SECUREBUF   0x00002000
+
+// Bruce Hsu for dummy NALU
+#define OMX_BUFFERFLAG_DUMMY_NALU   0x00004000
+
+// for ACodec color convert
+#define OMX_ACODEC_COLOR_CONVERT 0x01000000
+#endif
 
 /** @ingroup buf */
 typedef struct OMX_BUFFERHEADERTYPE
@@ -499,6 +514,7 @@ typedef struct OMX_PORT_PARAM_TYPE {
 } OMX_PORT_PARAM_TYPE; 
 
 #ifdef MTK_HARDWARE
+/** @ingroup comp */
 typedef struct OMX_MTK_PLATFORM_PRIVATE {
     OMX_U32 mM4UMVABufferPa;
     OMX_U32 mM4UVABufferVa;
@@ -520,6 +536,11 @@ typedef enum OMX_EVENTTYPE
    OMX_EventComponentResumed,     /**< Component resumed due to reacquisition of resources */
    OMX_EventDynamicResourcesAvailable, /**< Component has acquired previously unavailable dynamic resources */
    OMX_EventPortFormatDetected,      /**< Component has detected a supported format. */
+#ifdef MTK_HARDWARE
+// <--- Morris Yang 20110322 add for RV resizing
+   OMX_EventPortResolutionChanged,
+   OMX_EventComponentInfoNotified,  /**< component has notified infomation for IL */
+#endif
    OMX_EventKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
    OMX_EventVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
    OMX_EventMax = 0x7FFFFFFF

@@ -25,6 +25,26 @@
 extern "C" {
 #endif
 
+#ifdef MTK_HARDWARE
+typedef struct MTK_PLATFORM_PRIVATE {
+    unsigned long mM4UMVABufferPa;
+    unsigned long mM4UVABufferVa;
+    //add next private members
+} MTK_PLATFORM_PRIVATE;
+
+typedef struct MtkI420ColorConverterInfo {
+    int64_t mProfileColorConvCnt;
+    int64_t mProfileColorConvout_timeMin;
+    int64_t mProfileColorConvout_timeMax;
+    int64_t mProfileColorConvout_timeAvg;
+    int64_t mProfileColorConvout_out_timeTotal;
+
+    int mEnableMVA;
+    int mEnableION;
+    int mSrcFormat;
+    int mDstFormat;
+}MtkI420ColorConverterInfo;
+#endif
 typedef struct II420ColorConverter {
 
     /*
@@ -112,6 +132,20 @@ typedef struct II420ColorConverter {
         int srcWidth, int srcHeight,
         int* encoderWidth, int* encoderHeight,
         ARect* encoderRect, int* encoderBufferSize);
+#ifdef MTK_HARDWARE
+    int (*setDecoderOutputFormat)(II420ColorConverter *converter, int mOutFormat);
+    int (*setEncoderInputFormat)(II420ColorConverter *converter, int mInFormat);
+    int (*initACodecColorConverter) (II420ColorConverter *converter, void** BufHandler, int mEnableMVA);
+    int (*deinitACodecColorConverter) (II420ColorConverter *converter, void* BufHandler);
+    int (*getVideoAllocMVA) (II420ColorConverter *converter, void* BufHandler, unsigned long a_u4Va, 
+        unsigned long* ap_u4Pa, unsigned long a_u4Size, void *a_pvM4uConfig_p);
+    int (*freeVideoAllocMVA) (II420ColorConverter *converter, void* BufHandler, unsigned long a_u4Va, 
+        unsigned long ap_u4Pa, unsigned long a_u4Size, void *a_pvM4uConfig_p);
+    int (*secondConvertDecoderOutputToI420) (
+        II420ColorConverter *converter, void* srcBits, int srcWidth, int srcHeight, ARect srcRect, void* dstBits);
+
+    MtkI420ColorConverterInfo *mMtkColorConvertInfo;
+#endif
 
 } II420ColorConverter;
 

@@ -135,14 +135,10 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamAudioEvrc,                /**< reference: OMX_AUDIO_PARAM_EVRCTYPE */
     OMX_IndexParamAudioSmv,                 /**< reference: OMX_AUDIO_PARAM_SMVTYPE */
     OMX_IndexParamAudioVorbis,              /**< reference: OMX_AUDIO_PARAM_VORBISTYPE */
-#ifdef MTK_HARDWARE
     OMX_IndexParamAudioApe,                 /**< reference: OMX_AUDIO_PARAM_APEPROFILETYPE */
-#endif
     OMX_IndexParamAudioFlac,                /**< reference: OMX_AUDIO_PARAM_FLACTYPE */
-#ifdef MTK_HARDWARE
     OMX_IndexParamAudioRaw,
 	OMX_IndexParamAudioWmaProfile,
-#endif
 
     OMX_IndexConfigAudioMidiImmediateEvent, /**< reference: OMX_AUDIO_CONFIG_MIDIIMMEDIATEEVENTTYPE */
     OMX_IndexConfigAudioMidiControl,        /**< reference: OMX_AUDIO_CONFIG_MIDICONTROLTYPE */
@@ -190,13 +186,8 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamVideoWmv,                 /**< reference: OMX_VIDEO_PARAM_WMVTYPE */
     OMX_IndexParamVideoRv,                  /**< reference: OMX_VIDEO_PARAM_RVTYPE */
     OMX_IndexParamVideoAvc,                 /**< reference: OMX_VIDEO_PARAM_AVCTYPE */
-#ifdef MTK_HARDWARE
-    OMX_IndexParamVideoHevc,                /**< reference: OMX_VIDEO_PARAM_HEVCTYPE */
-#endif
     OMX_IndexParamVideoH263,                /**< reference: OMX_VIDEO_PARAM_H263TYPE */
-#ifdef MTK_HARDWARE
     OMX_IndexParamVideoVp8, 				        /**< reference: OMX_VIDEO_PARAM_VP8TYPE */
-#endif
     OMX_IndexParamVideoProfileLevelQuerySupported, /**< reference: OMX_VIDEO_PARAM_PROFILELEVELTYPE */
     OMX_IndexParamVideoProfileLevelCurrent, /**< reference: OMX_VIDEO_PARAM_PROFILELEVELTYPE */
     OMX_IndexConfigVideoBitrate,            /**< reference: OMX_VIDEO_CONFIG_BITRATETYPE */
@@ -209,6 +200,9 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamVideoSliceFMO,            /**< reference: OMX_VIDEO_PARAM_AVCSLICEFMO */
     OMX_IndexConfigVideoAVCIntraPeriod,     /**< reference: OMX_VIDEO_CONFIG_AVCINTRAPERIOD */
     OMX_IndexConfigVideoNalSize,            /**< reference: OMX_VIDEO_CONFIG_NALSIZE */
+#ifdef MTK_VIDEO_HEVC_SUPPORT
+    OMX_IndexParamVideoHevc,                /**< reference: OMX_VIDEO_PARAM_HEVCTYPE */
+#endif
 
     /* Image & Video common Configurations */
     OMX_IndexCommonStartUnused = 0x07000000,
@@ -278,18 +272,47 @@ typedef enum OMX_INDEXTYPE {
        only be sent to the appropriate component. */
 
 #ifdef MTK_HARDWARE
-    OMX_IndexVendorMtkOmxVdecTimeSource        = 0x7F000001,
-    OMX_IndexVendorMtkOmxVdecThumbnailMode     = 0x7F00000A,
-    OMX_IndexVendorMtkOmxVdecGetAspectRatio    = 0x7F000018,
-    OMX_IndexVendorMtkOmxVdecGetCropInfo       = 0x7F000019,
-    OMX_IndexVendorMtkOmxVideoSetClientLocally = 0x7f000020,
-#endif
+    OMX_IndexVendorMtkOmxVdecTimeSource = 0x7F000001,
+    OMX_IndexVendorMtkOmxVdecPriorityAdjustment,
+    OMX_IndexVendorMtkOmxVdecVideoSpecQuerySupported,
+    OMX_GoogleAndroidIndexEnableAndroidNativeBuffers,
+    OMX_GoogleAndroidIndexUseAndroidNativeBuffer,
+    OMX_GoogleAndroidIndexGetAndroidNativeBufferUsage,
+    OMX_GoogleAndroidIndexStoreMetaDataInBuffers,   // for live effect recording
+    OMX_GoogleAndroidIndexPrepareForAdaptivePlayback,
+    OMX_IndexVendorMtkOmxPartialFrameQuerySupported,
 
+	OMX_IndexVendorMtkOmxVdecThumbnailMode,
+	OMX_IndexVendorMtkOmxVdecSeekMode,
+    OMX_IndexVendorMtkOmxVdecSwitchBwTVout,
+    OMX_IndexVendorMtkOmxVencSetForceIframe,
+    OMX_IndexVendorMtkOmxVencSetTimelapseMode,
+    OMX_IndexVendorMtkOmxVencSetWhiteboardEffectMode,
+    OMX_IndexVendorMtkOmxVencSetMCIMode,
+
+    OMX_IndexVendorMtkOmxVdecConcealmentLevel,
+    OMX_IndexVendorMtkOmxVdecStreamingMode,
+
+    OMX_IndexVendorMtkOmxVdecGetAspectRatio,
+    OMX_IndexVendorMtkOmxVdecGetCropInfo, 
+    OMX_IndexVendorMtkOmxVideoUseIonBuffer,
+    OMX_IndexVendorMtkOmxVencSetIInterval,
+    OMX_IndexVendorMtkOmxVencSkipFrame,
+    OMX_IndexVendorMtkOmxVdecFixedMaxBuffer,
+    OMX_IndexVendorMtkOmxVencDrawBlack,     //for Miracast test case SIGMA 5.1.11 workaround
+    OMX_IndexVendorMtkOmxVdecNoReorderMode,
+    OMX_IndexVendorMtkOmxVideoSetClientLocally,
+    OMX_IndexVendorMtkOmxVdecSkipReferenceCheckMode, // Cheng-Jung 20131010 Skip reference check
+    OMX_IndexVendorMtkOmxVencSetScenario,   //for Live photo (set venc scenario)
+
+    //Gary Wu add for ACodec color convert to get MVA addrs
+    //OMX_IndexVendorMtkOmxVdecACodecColorConvertGetMVAAddr = 0x7F0FF001,
+    OMX_IndexVendorMtkOmxVdecACodecColorConvertMode = 0x7F0FF002,
+    //add for MediaCodec encode with input data format is RGB
+    OMX_IndexVendorMtkOmxVdecACodecEncodeRGB2YUVMode = 0x7F0FF101,
+#endif 
     OMX_IndexParamAudioMp2,                 /**< reference: OMX_AUDIO_PARAM_MP2TYPE */
     OMX_IndexParamAudioAc3,                 /**< reference: OMX_AUDIO_PARAM_AC3TYPE */
-#ifndef MTK_HARDWARE
-    OMX_IndexParamAudioApe,                 /**< reference: OMX_AUDIO_PARAM_APETYPE */
-#endif
     OMX_IndexParamAudioDts,                 /**< reference: OMX_AUDIO_PARAM_DTSTYPE */
     OMX_IndexParamVideoFFmpeg,              /**< reference: OMX_VIDEO_PARAM_FFMPEGTYPE */
     OMX_IndexParamAudioFFmpeg,              /**< reference: OMX_AUDIO_PARAM_FFMPEGTYPE */

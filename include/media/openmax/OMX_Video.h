@@ -87,12 +87,17 @@ typedef enum OMX_VIDEO_CODINGTYPE {
     OMX_VIDEO_CodingMJPEG,      /**< Motion JPEG */
     OMX_VIDEO_CodingVP8,        /**< Google VP8, formerly known as On2 VP8 */
     OMX_VIDEO_CodingVP9,        /**< Google VP9 */
+#ifdef MTK_HARDWARE
+#ifdef MTK_VIDEO_HEVC_SUPPORT
+    OMX_VIDEO_CodingHEVC,       /**< HEVC */
+#endif
+#endif
     OMX_VIDEO_CodingKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
     OMX_VIDEO_CodingVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
     OMX_VIDEO_CodingVC1,        /**< VC1 */
     OMX_VIDEO_CodingFLV1,       /**< Sorenson's H.263 */
     OMX_VIDEO_CodingDIVX,       /**< DIVX */
-    OMX_VIDEO_CodingHEVC,       /**< HEVC */
+//    OMX_VIDEO_CodingHEVC,       /**< HEVC */
     OMX_VIDEO_CodingFFMPEG,     /**< FFMPEG */
     OMX_VIDEO_CodingMax = 0x7FFFFFFF
 } OMX_VIDEO_CODINGTYPE;
@@ -245,6 +250,9 @@ typedef enum OMX_VIDEO_CONTROLRATETYPE {
     OMX_Video_ControlRateConstantSkipFrames,
     OMX_Video_ControlRateKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
     OMX_Video_ControlRateVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
+#ifdef MTK_HARDWARE
+    OMX_Video_ControlRateMtkWFD = 0x7F000001,   //for wifi-display mode
+#endif
     OMX_Video_ControlRateMax = 0x7FFFFFFF
 } OMX_VIDEO_CONTROLRATETYPE;
 
@@ -844,6 +852,70 @@ typedef enum OMX_VIDEO_AVCLOOPFILTERTYPE {
     OMX_VIDEO_AVCLoopFilterMax = 0x7FFFFFFF
 } OMX_VIDEO_AVCLOOPFILTERTYPE;
 
+#ifdef MTK_HARDWARE
+#ifdef MTK_VIDEO_HEVC_SUPPORT
+/** 
+ * HEVC profile types, each profile indicates support for various 
+ * performance bounds and different annexes.
+ */
+typedef enum OMX_VIDEO_HEVCPROFILETYPE {
+    OMX_VIDEO_HEVCProfileBaseline = 0x01,   /**< Baseline profile */
+    OMX_VIDEO_HEVCProfileMain     = 0x02,   /**< Main profile */
+    OMX_VIDEO_HEVCProfileExtended = 0x04,   /**< Extended profile */
+    OMX_VIDEO_HEVCProfileHigh     = 0x08,   /**< High profile */
+    OMX_VIDEO_HEVCProfileHigh10   = 0x10,   /**< High 10 profile */
+    OMX_VIDEO_HEVCProfileHigh422  = 0x20,   /**< High 4:2:2 profile */
+    OMX_VIDEO_HEVCProfileHigh444  = 0x40,   /**< High 4:4:4 profile */
+    OMX_VIDEO_HEVCProfileKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
+    OMX_VIDEO_HEVCProfileVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
+    OMX_VIDEO_HEVCProfileMax      = 0x7FFFFFFF  
+} OMX_VIDEO_HEVCPROFILETYPE;
+
+
+/** 
+ * HEVC level types, each level indicates support for various frame sizes, 
+ * bit rates, decoder frame rates.  No need 
+ */
+typedef enum OMX_VIDEO_HEVCLEVELTYPE {
+    OMX_VIDEO_HEVCLevel1   = 0x01,     /**< Level 1 */
+    OMX_VIDEO_HEVCLevel1b  = 0x02,     /**< Level 1b */
+    OMX_VIDEO_HEVCLevel11  = 0x04,     /**< Level 1.1 */
+    OMX_VIDEO_HEVCLevel12  = 0x08,     /**< Level 1.2 */
+    OMX_VIDEO_HEVCLevel13  = 0x10,     /**< Level 1.3 */
+    OMX_VIDEO_HEVCLevel2   = 0x20,     /**< Level 2 */
+    OMX_VIDEO_HEVCLevel21  = 0x40,     /**< Level 2.1 */
+    OMX_VIDEO_HEVCLevel22  = 0x80,     /**< Level 2.2 */
+    OMX_VIDEO_HEVCLevel3   = 0x100,    /**< Level 3 */
+    OMX_VIDEO_HEVCLevel31  = 0x200,    /**< Level 3.1 */
+    OMX_VIDEO_HEVCLevel32  = 0x400,    /**< Level 3.2 */
+    OMX_VIDEO_HEVCLevel4   = 0x800,    /**< Level 4 */
+    OMX_VIDEO_HEVCLevel41  = 0x1000,   /**< Level 4.1 */
+    OMX_VIDEO_HEVCLevel42  = 0x2000,   /**< Level 4.2 */
+    OMX_VIDEO_HEVCLevel5   = 0x4000,   /**< Level 5 */
+    OMX_VIDEO_HEVCLevel51  = 0x8000,   /**< Level 5.1 */
+    OMX_VIDEO_HEVCLevelKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
+    OMX_VIDEO_HEVCLevelVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
+    OMX_VIDEO_HEVCLevelMax = 0x7FFFFFFF  
+} OMX_VIDEO_HEVCLEVELTYPE;
+
+
+/** 
+ * HEVC loop filter modes 
+ *
+ * OMX_VIDEO_HEVCLoopFilterEnable               : Enable
+ * OMX_VIDEO_HEVCLoopFilterDisable              : Disable
+ * OMX_VIDEO_HEVCLoopFilterDisableSliceBoundary : Disabled on slice boundaries
+ */
+typedef enum OMX_VIDEO_HEVCLOOPFILTERTYPE {
+    OMX_VIDEO_HEVCLoopFilterEnable = 0,
+    OMX_VIDEO_HEVCLoopFilterDisable,
+    OMX_VIDEO_HEVCLoopFilterDisableSliceBoundary,
+    OMX_VIDEO_HEVCLoopFilterKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
+    OMX_VIDEO_HEVCLoopFilterVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
+    OMX_VIDEO_HEVCLoopFilterMax = 0x7FFFFFFF
+} OMX_VIDEO_HEVCLOOPFILTERTYPE;
+#endif
+#endif
 
 /** 
  * AVC params 
@@ -928,6 +1000,92 @@ typedef struct OMX_VIDEO_PARAM_AVCTYPE {
 	OMX_VIDEO_AVCLOOPFILTERTYPE eLoopFilterMode;
 } OMX_VIDEO_PARAM_AVCTYPE;
 
+#ifdef MTK_HARDWARE
+#ifdef MTK_VIDEO_HEVC_SUPPORT
+/** 
+ * HEVC params 
+ *
+ * STRUCT MEMBERS:
+ *  nSize                     : Size of the structure in bytes
+ *  nVersion                  : OMX specification version information
+ *  nPortIndex                : Port that this structure applies to
+ *  nSliceHeaderSpacing       : Number of macroblocks between slice header, put  
+ *                              zero if not used
+ *  nPFrames                  : Number of P frames between each I frame
+ *  nBFrames                  : Number of B frames between each I frame
+ *  bUseHadamard              : Enable/disable Hadamard transform
+ *  nRefFrames                : Max number of reference frames to use for inter
+ *                              motion search (1-16)
+ *  nRefIdxTrailing           : Pic param set ref frame index (index into ref
+ *                              frame buffer of trailing frames list), B frame
+ *                              support
+ *  nRefIdxForward            : Pic param set ref frame index (index into ref
+ *                              frame buffer of forward frames list), B frame
+ *                              support
+ *  bEnableUEP                : Enable/disable unequal error protection. This 
+ *                              is only valid of data partitioning is enabled.
+ *  bEnableFMO                : Enable/disable flexible macroblock ordering
+ *  bEnableASO                : Enable/disable arbitrary slice ordering
+ *  bEnableRS                 : Enable/disable sending of redundant slices
+ *  eProfile                  : HEVC profile(s) to use
+ *  eLevel                    : HEVC level(s) to use
+ *  nAllowedPictureTypes      : Specifies the picture types allowed in the 
+ *                              bitstream
+ *  bFrameMBsOnly             : specifies that every coded picture of the 
+ *                              coded video sequence is a coded frame 
+ *                              containing only frame macroblocks
+ *  bMBAFF                    : Enable/disable switching between frame and 
+ *                              field macroblocks within a picture
+ *  bEntropyCodingCABAC       : Entropy decoding method to be applied for the 
+ *                              syntax elements for which two descriptors appear 
+ *                              in the syntax tables
+ *  bWeightedPPrediction      : Enable/disable weighted prediction shall not 
+ *                              be applied to P and SP slices
+ *  nWeightedBipredicitonMode : Default weighted prediction is applied to B 
+ *                              slices 
+ *  bconstIpred               : Enable/disable intra prediction
+ *  bDirect8x8Inference       : Specifies the method used in the derivation 
+ *                              process for luma motion vectors for B_Skip, 
+ *                              B_Direct_16x16 and B_Direct_8x8 as specified 
+ *                              in subclause 8.4.1.2 of the HEVC spec 
+ *  bDirectSpatialTemporal    : Flag indicating spatial or temporal direct
+ *                              mode used in B slice coding (related to 
+ *                              bDirect8x8Inference) . Spatial direct mode is 
+ *                              more common and should be the default.
+ *  nCabacInitIdx             : Index used to init CABAC contexts
+ *  eLoopFilterMode           : Enable/disable loop filter
+ */
+typedef struct OMX_VIDEO_PARAM_HEVCTYPE {
+    OMX_U32 nSize;                 
+    OMX_VERSIONTYPE nVersion;      
+    OMX_U32 nPortIndex;            
+    OMX_U32 nSliceHeaderSpacing;  
+    OMX_U32 nPFrames;     
+    OMX_U32 nBFrames;     
+    OMX_BOOL bUseHadamard;
+    OMX_U32 nRefFrames;  
+	OMX_U32 nRefIdx10ActiveMinus1;
+	OMX_U32 nRefIdx11ActiveMinus1;
+    OMX_BOOL bEnableUEP;  
+    OMX_BOOL bEnableFMO;  
+    OMX_BOOL bEnableASO;  
+    OMX_BOOL bEnableRS;   
+    OMX_VIDEO_HEVCPROFILETYPE eProfile;
+	OMX_VIDEO_HEVCLEVELTYPE eLevel; 
+    OMX_U32 nAllowedPictureTypes;  
+	OMX_BOOL bFrameMBsOnly;        									
+    OMX_BOOL bMBAFF;               
+    OMX_BOOL bEntropyCodingCABAC;  
+    OMX_BOOL bWeightedPPrediction; 
+    OMX_U32 nWeightedBipredicitonMode; 
+    OMX_BOOL bconstIpred ;
+    OMX_BOOL bDirect8x8Inference;  
+	OMX_BOOL bDirectSpatialTemporal;
+	OMX_U32 nCabacInitIdc;
+	OMX_VIDEO_HEVCLOOPFILTERTYPE eLoopFilterMode;
+} OMX_VIDEO_PARAM_HEVCTYPE;
+#endif
+#endif
 typedef struct OMX_VIDEO_PARAM_PROFILELEVELTYPE {
    OMX_U32 nSize;                 
    OMX_VERSIONTYPE nVersion;      
@@ -1019,6 +1177,23 @@ typedef enum OMX_VIDEO_AVCSLICEMODETYPE {
     OMX_VIDEO_SLICEMODE_AVCLevelMax = 0x7FFFFFFF
 } OMX_VIDEO_AVCSLICEMODETYPE;
 
+#ifdef MTK_VIDEO_HEVC_SUPPORT
+/** 
+ * HEVC Slice Mode modes 
+ *
+ * OMX_VIDEO_SLICEMODE_HEVCDefault   : Normal frame encoding, one slice per frame
+ * OMX_VIDEO_SLICEMODE_HEVCMBSlice   : NAL mode, number of MBs per frame
+ * OMX_VIDEO_SLICEMODE_HEVCByteSlice : NAL mode, number of bytes per frame
+ */
+typedef enum OMX_VIDEO_HEVCSLICEMODETYPE {
+    OMX_VIDEO_SLICEMODE_HEVCDefault = 0,
+    OMX_VIDEO_SLICEMODE_HEVCMBSlice,
+    OMX_VIDEO_SLICEMODE_HEVCByteSlice,
+    OMX_VIDEO_SLICEMODE_HEVCKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
+    OMX_VIDEO_SLICEMODE_HEVCVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
+    OMX_VIDEO_SLICEMODE_HEVCLevelMax = 0x7FFFFFFF
+} OMX_VIDEO_HEVCSLICEMODETYPE;
+#endif
 /** 
  * AVC FMO Slice Mode Params 
  *
@@ -1038,6 +1213,27 @@ typedef struct OMX_VIDEO_PARAM_AVCSLICEFMO {
     OMX_U8 nSliceGroupMapType;
     OMX_VIDEO_AVCSLICEMODETYPE eSliceMode;
 } OMX_VIDEO_PARAM_AVCSLICEFMO;
+#ifdef MTK_VIDEO_HEVC_SUPPORT
+/** 
+ * HEVC FMO Slice Mode Params 
+ *
+ * STRUCT MEMBERS:
+ *  nSize      : Size of the structure in bytes
+ *  nVersion   : OMX specification version information
+ *  nPortIndex : Port that this structure applies to
+ *  nNumSliceGroups : Specifies the number of slice groups
+ *  nSliceGroupMapType : Specifies the type of slice groups
+ *  eSliceMode : Specifies the type of slice
+ */
+typedef struct OMX_VIDEO_PARAM_HEVCSLICEFMO {
+    OMX_U32 nSize; 
+    OMX_VERSIONTYPE nVersion;
+    OMX_U32 nPortIndex;
+    OMX_U8 nNumSliceGroups;
+    OMX_U8 nSliceGroupMapType;
+    OMX_VIDEO_HEVCSLICEMODETYPE eSliceMode;
+} OMX_VIDEO_PARAM_HEVCSLICEFMO;
+#endif
 
 /** 
  * AVC IDR Period Configs
