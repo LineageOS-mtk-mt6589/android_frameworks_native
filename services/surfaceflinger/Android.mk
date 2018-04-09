@@ -99,6 +99,41 @@ LOCAL_SHARED_LIBRARIES := \
 	libui \
 	libgui
 
+ifeq ($(TARGET_BOARD_PLATFORM), mt6589)
+MTK_PATH = ../../../../mediatek/frameworks-ext/native/services/surfaceflinger
+
+LOCAL_SRC_FILES += \
+	$(MTK_PATH)/Layer.cpp \
+	$(MTK_PATH)/DisplayDevice.cpp \
+	$(MTK_PATH)/SurfaceFlinger.cpp \
+	$(MTK_PATH)/SurfaceTextureLayer.cpp \
+	$(MTK_PATH)/DisplayHardware/HWComposer.cpp \
+	$(MTK_PATH)/RenderEngine/RenderEngine.cpp \
+	$(MTK_PATH)/RenderEngine/GLES11RenderEngine.cpp \
+	$(MTK_PATH)/RenderEngine/GLES20RenderEngine.cpp \
+	$(MTK_PATH)/SurfaceFlingerWatchDog.cpp
+
+ifneq ($(strip $(TARGET_BUILD_VARIANT)), eng)
+	LOCAL_CFLAGS += -DMTK_USER_BUILD
+endif
+
+ifeq ($(MTK_TRIPLE_FRAMEBUFFER_SUPPORT),yes)
+	LOCAL_CFLAGS += -DNUM_FRAMEBUFFER_SURFACE_BUFFERS=3
+endif
+
+LOCAL_REQUIRED_MODULES += \
+	drm_disable_icon.png
+
+LOCAL_SHARED_LIBRARIES += \
+	libskia
+
+LOCAL_C_INCLUDES := \
+	$(TOP)/$(MTK_ROOT)/hardware/gralloc_extra/include \
+	$(TOP)/$(MTK_ROOT)/external/aee/binary/inc \
+	external/skia/include/core \
+	external/skia/include/lazy
+endif
+
 ifeq ($(BOARD_USES_SAMSUNG_HDMI),true)
         LOCAL_CFLAGS += -DSAMSUNG_HDMI_SUPPORT
         LOCAL_SHARED_LIBRARIES += libTVOut libhdmiclient
@@ -140,6 +175,10 @@ LOCAL_SHARED_LIBRARIES := \
 	liblog \
 	libbinder \
 	libutils
+ifeq ($(TARGET_BOARD_PLATFORM), mt6589)
+LOCAL_C_INCLUDES := \
+	$(TOP)/$(MTK_ROOT)/kernel/include
+endif
 
 LOCAL_MODULE:= surfaceflinger
 

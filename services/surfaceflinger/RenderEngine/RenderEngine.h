@@ -25,6 +25,11 @@
 #include <EGL/eglext.h>
 #include <ui/mat4.h>
 
+#ifdef MTK_MT6589
+#define DRM_IMAGE_PATH "/system/media/images/drm_disable_icon.png"
+#include <utils/Mutex.h>
+#include <utils/RefBase.h>
+#endif
 // ---------------------------------------------------------------------------
 namespace android {
 // ---------------------------------------------------------------------------
@@ -35,6 +40,9 @@ class Region;
 class Mesh;
 class Texture;
 
+#ifdef MTK_MT6589
+class DisplayDevice;
+#endif
 class RenderEngine {
     enum GlesVersion {
         GLES_VERSION_1_0    = 0x10000,
@@ -117,6 +125,28 @@ public:
     virtual size_t getMaxViewportDims() const = 0;
 
     EGLContext getEGLContext() const;
+#ifdef MTK_MT6589
+private:
+    uint32_t mProtectedImageTexName;
+    mutable Mutex mProtectedImageLock;
+
+protected:
+    virtual uint32_t createProtectedImageTextureLocked() = 0;
+
+public:
+    // for the protected layer texture and display
+    uint32_t getProtectedImageTexName();
+    uint32_t deleteProtectedImageTexture();
+    virtual void setupLayerProtectedImage() = 0;
+
+    // for AOSP display display orientation issue correction
+    void getHwInverseMatrix(const sp<const DisplayDevice>& hw, mat4& inv);
+    virtual void setViewportAndProjection(const sp<const DisplayDevice>& hw,
+            size_t vpw, size_t vph) = 0;
+
+    // debugging
+    void drawDebugLine(uint32_t w, uint32_t h) const;
+#endif
 };
 
 // ---------------------------------------------------------------------------

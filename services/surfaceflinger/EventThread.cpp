@@ -32,6 +32,11 @@
 #include "EventThread.h"
 #include "SurfaceFlinger.h"
 
+#ifdef MTK_MT6589
+// reserve client pid infomation
+#include <binder/IPCThreadState.h>
+#include <cutils/xlog.h>
+#endif
 // ---------------------------------------------------------------------------
 namespace android {
 // ---------------------------------------------------------------------------
@@ -345,11 +350,20 @@ EventThread::Connection::Connection(
         const sp<EventThread>& eventThread)
     : count(-1), mEventThread(eventThread), mChannel(new BitTube())
 {
+#ifdef MTK_MT6589
+    // reserve client pid infomation
+    pid = IPCThreadState::self()->getCallingPid();
+    XLOGI("EventThread Client Pid (%d) created", pid);
+#endif
 }
 
 EventThread::Connection::~Connection() {
     // do nothing here -- clean-up will happen automatically
     // when the main thread wakes up
+#ifdef MTK_MT6589
+    // reserve client pid infomation
+    XLOGI("EventThread Client Pid (%d) disconnected by (%d)", pid, getpid());
+#endif
 }
 
 void EventThread::Connection::onFirstRef() {
@@ -362,15 +376,33 @@ sp<BitTube> EventThread::Connection::getDataChannel() const {
 }
 
 void EventThread::Connection::setVsyncRate(uint32_t count) {
+#ifdef MTK_MT6589
+#ifndef MTK_USER_BUILD
+    XLOGD("setVsyncRate(%d, c=%d)", pid, count);
+#endif
+#endif
     mEventThread->setVsyncRate(count, this);
 }
 
 void EventThread::Connection::requestNextVsync() {
+#ifdef MTK_MT6589
+#ifndef MTK_USER_BUILD
+    XLOGD("requestNextVsync(%d)", pid);
+#endif
+#endif
     mEventThread->requestNextVsync(this);
 }
 
 status_t EventThread::Connection::postEvent(
         const DisplayEventReceiver::Event& event) {
+#ifdef MTK_MT6589
+#ifndef MTK_USER_BUILD
+    if (event.header.type == DisplayEventReceiver::DISPLAY_EVENT_VSYNC)
+        XLOGD("postEvent(%d, v/c=%d)", pid, event.vsync.count);
+    else
+        XLOGD("postEvent(%d)", pid);
+#endif
+#endif
     ssize_t size = DisplayEventReceiver::sendEvents(mChannel, &event, 1);
     return size < 0 ? status_t(size) : status_t(NO_ERROR);
 }

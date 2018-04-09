@@ -113,6 +113,9 @@ RenderEngine* RenderEngine::create(EGLDisplay display, EGLConfig config) {
 }
 
 RenderEngine::RenderEngine() : mEGLContext(EGL_NO_CONTEXT) {
+#ifdef MTK_MT6589
+    mProtectedImageTexName = -1U;
+#endif
 }
 
 RenderEngine::~RenderEngine() {

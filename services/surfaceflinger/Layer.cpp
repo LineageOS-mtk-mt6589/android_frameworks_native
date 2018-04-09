@@ -45,6 +45,10 @@
 #include "DisplayHardware/HWComposer.h"
 
 #include "RenderEngine/RenderEngine.h"
+#ifndef MTK_DEFAULT_AOSP
+#include <cutils/xlog.h>
+#endif
+
 #ifdef QCOM_BSP
 #include <gralloc_priv.h>
 #endif
@@ -129,7 +133,25 @@ void Layer::onFirstRef() {
 #warning "disabling triple buffering"
     mSurfaceFlingerConsumer->setDefaultMaxBufferCount(2);
 #else
+#ifdef MTK_MT6589
+    if (1 == mFlinger->getHwComposer().mFeaturesState.directlink) {
+        // static overlay direct link case
+        mSurfaceFlingerConsumer->setDefaultMaxBufferCount(4);
+    } else {
+        char value[PROPERTY_VALUE_MAX];
+        property_get("ro.sf.triplebuf.disable", value, "0");
+        if (atoi(value)) {
+            // low mem case
+            ALOGW("triple buffer is disabled...");
+            mSurfaceFlingerConsumer->setDefaultMaxBufferCount(2);
+        } else {
+            // AOSP case
     mSurfaceFlingerConsumer->setDefaultMaxBufferCount(3);
+        }
+    }
+#else
+    mSurfaceFlingerConsumer->setDefaultMaxBufferCount(3);
+#endif
 #endif
 
     const sp<const DisplayDevice> hw(mFlinger->getDefaultDisplayDevice());
@@ -143,6 +165,10 @@ Layer::~Layer() {
     }
     mFlinger->deleteTextureAsync(mTextureName);
     mFrameTracker.logAndResetStats(mName);
+#ifdef MTK_MT6589
+    uint32_t texName = mFlinger->getRenderEngine().deleteProtectedImageTexture();
+    mFlinger->deleteTextureAsync(texName);
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -512,6 +538,9 @@ void Layer::setPerFrameData(const sp<const DisplayDevice>& hw,
     // NOTE: buffer can be NULL if the client never drew into this
     // layer yet, or if we ran out of memory
     layer.setBuffer(mActiveBuffer);
+#ifdef MTK_MT6589
+    layer.setDirty((mBufferDirty || mBufferRefCount <= 1 || contentDirty));
+#endif
 }
 
 void Layer::setAcquireFence(const sp<const DisplayDevice>& hw,
@@ -548,7 +577,13 @@ void Layer::draw(const sp<const DisplayDevice>& hw) {
 
 void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip) const
 {
+#ifdef MTK_MT6589
+    String8 name("onDraw");
+    name.appendFormat("(%s)", mName.string());
+    ATRACE_NAME(name.string());
+#else
     ATRACE_CALL();
+#endif
 
     if (CC_UNLIKELY(mActiveBuffer == 0)) {
         // the texture has not been created yet, this Layer has
@@ -651,6 +686,16 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip) const
     }
     drawWithOpenGL(hw, clip);
     engine.disableTexturing();
+#ifdef MTK_MT6589
+    // FIXME: should be put into RenderEngine
+    if (blackOutLayer && !hw->isSecure()) {
+        char value[PROPERTY_VALUE_MAX];
+        property_get("debug.sf.no_security_img", value, "0");
+        if (atoi(value) == 0) {
+            drawProtectedImage(hw, clip);
+        }
+    }
+#endif
 }
 
 
@@ -922,6 +967,15 @@ uint32_t Layer::doTransaction(uint32_t flags) {
 
 void Layer::commitTransaction() {
     mDrawingState = mCurrentState;
+#ifdef MTK_MT6589
+    // dump state result after transaction committed
+    if (CC_UNLIKELY(mFlinger->sPropertiesState.mLogTransaction)) {
+        String8 result;
+        Colorizer colorizer(false);
+        Layer::dump(result, colorizer);
+        XLOGD("%s", result.string());
+    }
+#endif
 }
 
 uint32_t Layer::getTransactionFlags(uint32_t flags) {
@@ -1052,6 +1106,9 @@ Region Layer::latchBuffer(bool& recomputeVisibleRegions)
 {
     ATRACE_CALL();
 
+#ifdef MTK_MT6589
+    mTransparentRegionsDirty = false;
+#endif
     Region outDirtyRegion;
     if (mQueuedFrames > 0) {
 
@@ -1072,10 +1129,16 @@ Region Layer::latchBuffer(bool& recomputeVisibleRegions)
             Layer::State& front;
             Layer::State& current;
             bool& recomputeVisibleRegions;
+#ifdef MTK_MT6589
+            bool mConsumeTransparentRegionsDirty;
+#endif
             Reject(Layer::State& front, Layer::State& current,
                     bool& recomputeVisibleRegions)
                 : front(front), current(current),
                   recomputeVisibleRegions(recomputeVisibleRegions) {
+#ifdef MTK_MT6589
+                  mConsumeTransparentRegionsDirty = false ;
+#endif
             }
 
             virtual bool reject(const sp<GraphicBuffer>& buf,
@@ -1144,6 +1207,12 @@ Region Layer::latchBuffer(bool& recomputeVisibleRegions)
                         // reject this buffer
                         //ALOGD("rejecting buffer: bufWidth=%d, bufHeight=%d, front.active.{w=%d, h=%d}",
                         //        bufWidth, bufHeight, front.active.w, front.active.h);
+#ifdef MTK_MT6589
+                        char msg[1024];
+                        snprintf(msg, 1024, "GraphicBuffer(%p) is rejected", buf.get());
+                        ALOGW("%s", msg);
+                        ATRACE_NAME(msg);
+#endif
                         return true;
                     }
                 }
@@ -1166,6 +1235,9 @@ Region Layer::latchBuffer(bool& recomputeVisibleRegions)
 
                     // recompute visible region
                     recomputeVisibleRegions = true;
+#ifdef MTK_MT6589
+                    mConsumeTransparentRegionsDirty = true ;
+#endif
                 }
 
                 return false;
@@ -1176,6 +1248,9 @@ Region Layer::latchBuffer(bool& recomputeVisibleRegions)
         Reject r(mDrawingState, getCurrentState(), recomputeVisibleRegions);
 
         status_t updateResult = mSurfaceFlingerConsumer->updateTexImage(&r);
+#ifdef MTK_MT6589
+        mTransparentRegionsDirty = r.mConsumeTransparentRegionsDirty;
+#endif
         if (updateResult == BufferQueue::PRESENT_LATER) {
             // Producer doesn't want buffer to be displayed yet.  Signal a
             // layer update so we check again at the next opportunity.
@@ -1244,6 +1319,14 @@ Region Layer::latchBuffer(bool& recomputeVisibleRegions)
         // transform the dirty region to window-manager space
         outDirtyRegion = (s.transform.transform(dirtyRegion));
     }
+#ifdef MTK_MT6589
+    // store buffer dirty infomation and pass to hwc later
+    mBufferDirty = !outDirtyRegion.isEmpty();
+    if (mBufferDirty == true){
+        // LazySwap(5) increment buffer ref count when the texture is created
+        mBufferRefCount++;
+    }
+#endif
     return outDirtyRegion;
 }
 
@@ -1321,9 +1404,26 @@ void Layer::dump(String8& result, Colorizer& colorizer) const
             mFormat, w0, h0, s0,f0,
             mQueuedFrames, mRefreshPending);
 
+#ifdef MTK_MT6589
+    result.appendFormat(
+            "      "
+            "secure=%d", mSecure);
+#endif
     if (mSurfaceFlingerConsumer != 0) {
         mSurfaceFlingerConsumer->dump(result, "            ");
     }
+#ifdef MTK_MT6589
+    char value[PROPERTY_VALUE_MAX];
+    uint32_t layerdump;
+
+    property_get("debug.sf.layerdump", value, "0");
+    layerdump = strtoul(value, NULL, 16);
+
+    // check which layer to dump; or -1 for all
+    if ((~0U == layerdump) || (uintptr_t(this) == layerdump)) {
+        dumpActiveBuffer();
+    }
+#endif
 }
 
 void Layer::dumpStats(String8& result) const {

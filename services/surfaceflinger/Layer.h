@@ -391,6 +391,21 @@ private:
     const wp<Client> mClientRef;
     // Transform hint assigned for the layer
     uint32_t mTransformHint;
+
+#ifdef MTK_MT6589
+public:
+    void drawProtectedImage(const sp<const DisplayDevice>& hw, const Region& clip) const;
+
+    // infomation for verifing if needs recompositon
+    bool mBufferDirty;
+    mutable uint64_t mBufferRefCount;
+    bool mTransparentRegionsDirty;
+
+private:
+    // dump the buffer that layer using
+    void dumpActiveBuffer() const;
+    void dumpGraphicBufferExtra(sp<GraphicBuffer> buf, const void* identity, float *bpp, char* fnam) const;
+#endif
 };
 
 // ---------------------------------------------------------------------------

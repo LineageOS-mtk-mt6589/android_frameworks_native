@@ -185,6 +185,9 @@ public:
         virtual void setAcquireFenceFd(int fenceFd) = 0;
         virtual void setPlaneAlpha(uint8_t alpha) = 0;
         virtual void onDisplayed() = 0;
+#ifdef MTK_MT6589
+        virtual void setDirty(bool dirty) = 0;
+#endif
     };
 
     /*
@@ -292,6 +295,10 @@ public:
     public:
         VSyncThread(HWComposer& hwc);
         void setEnabled(bool enabled);
+#ifdef MTK_MT6589
+        // 20120814: add property function for debug purpose
+        void setProperty();
+#endif
     };
 
     friend class VSyncThread;
@@ -350,6 +357,10 @@ private:
 
         // protected by mEventControlLock
         int32_t events;
+#ifdef MTK_MT6589
+        uint8_t subtype;
+        int32_t mirrorId;
+#endif
     };
 
     sp<SurfaceFlinger>              mFlinger;
@@ -377,6 +388,26 @@ private:
 
     // thread-safe
     mutable Mutex mEventControlLock;
+
+#ifdef MTK_MT6589
+private:
+    struct FramebufferTargetSync {
+        bool needWait;
+        mutable Mutex waitLock;
+        Condition waitCondition;
+    };
+    FramebufferTargetSync mFramebufferTargetSync[MAX_HWC_DISPLAYS];
+
+public:
+    void setWaitFramebufferTarget(int32_t id);
+
+    uint8_t getSubType(int disp) const;
+
+    status_t setDisplayMirrorId(int32_t id, int32_t mirrorId);
+
+    // platform features
+    hwc_feature_t mFeaturesState;
+#endif
 
     //GPUTileRect : CompMap, class to track the composition type of layers
     struct CompMap {

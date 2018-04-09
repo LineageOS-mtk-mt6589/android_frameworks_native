@@ -535,6 +535,94 @@ private:
 #if defined(SAMSUNG_HDMI_SUPPORT) && defined(SAMSUNG_EXYNOS5250)
     SecHdmiClient *                         mHdmiClient;
 #endif
+
+#ifdef MTK_MT6589
+private:
+    // boot time info
+    bool mBootAnimationEnabled;
+
+    // for lazy swap
+    static bool sContentsDirty;
+    void checkLayersSwapRequired(sp<const DisplayDevice>& hw,
+                                 const bool prevGlesComposition);
+
+    // for debug
+    void setMTKProperties();
+    void setMTKProperties(String8 &result);
+
+    // control thread priority
+    status_t adjustPriority() const;
+
+    // decide to run boot animation
+    void checkEnableBootAnim();
+
+    // set boot done msg
+    void bootProf(int start) const;
+
+    virtual status_t getDisplayInfoEx(const sp<IBinder>& display, DisplayInfoEx* info);
+
+public:
+    // helper class for collect related property settings
+    struct PropertiesState {
+        PropertiesState()
+            : mHwRotation(0)
+            , mBusySwap(false)
+            , mLogRepaint(false)
+            , mLogBuffer(false)
+            , mLogTransaction(false)
+            , mLineG3D(false)
+            , mLineScreenShot(false)
+            , mDebugS3D(false)
+            , mDelayTime(0)
+            , mContBufsDump(0)
+        { }
+
+        // for phyical panel rotation info
+        int mHwRotation;
+
+        // force to swap buffer every frame
+        bool mBusySwap;
+
+        // sf repaint log info
+        bool mLogRepaint;
+
+        // log buffer queue status use in SF
+        bool mLogBuffer;
+
+        // log layer state transaction
+        bool mLogTransaction;
+
+        // debug G3D render
+        bool mLineG3D;
+
+        // debug screen shot state
+        bool mLineScreenShot;
+
+        // switch S3D debug mode
+        bool mDebugS3D;
+
+        // for enabling slow motion
+        uint32_t mDelayTime;
+
+        // for continuous buffers dump
+        int mContBufsDump;
+    };
+    static PropertiesState sPropertiesState;
+
+    // for buffer dump
+    mutable Mutex mDumpLock;
+
+    // for SF watch dog identity
+    uint32_t mWatchDogIndex;
+
+    // verify which display could be mirrored
+    void scanMirrorDisplay();
+
+    // for lazy swap check
+    bool getAndClearLayersSwapRequired(int32_t id);
+
+    bool getBootFinished() { return mBootFinished; }
+#endif
 };
 
 }; // namespace android

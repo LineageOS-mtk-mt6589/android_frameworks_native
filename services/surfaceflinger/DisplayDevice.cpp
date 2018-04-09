@@ -111,12 +111,31 @@ DisplayDevice::DisplayDevice(
     // virtual displays are always considered enabled
     mScreenAcquired = (mType >= DisplayDevice::DISPLAY_VIRTUAL);
 
+#ifdef MTK_MT6589
+    mLayersSwapRequired = false;
+    mCurrFbLayers = 0;
+    mHwOrientation = DisplayState::eOrientationDefault;
+    mHwcMirrorId = -1;
+#endif
     // Name the display.  The name will be replaced shortly if the display
     // was created with createDisplay().
     switch (mType) {
         case DISPLAY_PRIMARY:
             char value[PROPERTY_VALUE_MAX];
             mDisplayName = "Built-in Screen";
+#ifdef MTK_MT6589
+            switch (mFlinger->sPropertiesState.mHwRotation) {
+                case 90:
+                    mHwOrientation = DisplayState::eOrientation90;
+                    break;
+                case 180:
+                    mHwOrientation = DisplayState::eOrientation180;
+                    break;
+                case 270:
+                    mHwOrientation = DisplayState::eOrientation270;
+                    break;
+            }
+#endif
 
             /* hwrotation applies only to the primary display */
             property_get("ro.sf.hwrotation", value, "0");
@@ -249,7 +268,20 @@ void DisplayDevice::swapBuffers(HWComposer& hwc) const {
     if (hwc.initCheck() != NO_ERROR ||
             (hwc.hasGlesComposition(mHwcDisplayId) &&
              (hwc.supportsFramebufferTarget() || mType >= DISPLAY_VIRTUAL))) {
+#ifdef MTK_MT6589
+        // layer swap applied for HWC 1.1 and later
+        EGLBoolean success = EGL_TRUE;
+        if (mLayersSwapRequired) {
+            hwc.setWaitFramebufferTarget(mType);
+
+            if (CC_UNLIKELY(mFlinger->sPropertiesState.mLineG3D))
+                drawDebugLine();
+
+            success = eglSwapBuffers(mDisplay, mSurface);
+        }
+#else
         EGLBoolean success = eglSwapBuffers(mDisplay, mSurface);
+#endif
         if (!success) {
             EGLint error = eglGetError();
             if (error == EGL_CONTEXT_LOST ||
@@ -358,6 +390,9 @@ bool DisplayDevice::isScreenAcquired() const {
 void DisplayDevice::setLayerStack(uint32_t stack) {
     mLayerStack = stack;
     dirtyRegion.set(bounds());
+#ifdef MTK_MT6589
+    mFlinger->scanMirrorDisplay();
+#endif
 }
 
 // ----------------------------------------------------------------------------
@@ -454,6 +489,15 @@ void DisplayDevice::setProjection(int orientation,
 
     dirtyRegion.set(getBounds());
 
+#ifdef MTK_MT6589
+    // for boot animation black screen issue
+    if ((false == mFlinger->getBootFinished()) && (DISPLAY_PRIMARY == mType)) {
+        ALOGI("[%s] clear DisplayDevice(type:%d) dirty region while booting",
+            __FUNCTION__, mType);
+
+        dirtyRegion.clear();
+    }
+#endif
     Transform TL, TP, S;
     float src_width  = viewport.width();
     float src_height = viewport.height();
@@ -471,6 +515,15 @@ void DisplayDevice::setProjection(int orientation,
     float dst_y = frame.top;
     TL.set(-src_x, -src_y);
     TP.set(dst_x, dst_y);
+#ifdef MTK_MT6589
+    // need to take care of HW rotation for mGlobalTransform
+    // for case if the panel is not installed align with device orientation
+    if (DisplayState::eOrientationDefault != mHwOrientation) {
+        DisplayDevice::orientationToTransfrom(
+            (orientation + mHwOrientation) % (DisplayState::eOrientation270 + 1),
+            w, h, &R);
+    }
+#endif
 
     // The viewport and frame are both in the logical orientation.
     // Apply the logical translation, scale to physical size, apply the

@@ -78,6 +78,13 @@
 #include "RenderEngine/RenderEngine.h"
 #include <cutils/compiler.h>
 
+#ifdef MTK_MT6589
+#include "aee.h"
+#include <sys/ioctl.h>
+#include <stdio.h>
+#include <fcntl.h>
+#endif
+
 #ifdef SAMSUNG_HDMI_SUPPORT
 #include "SecTVOutService.h"
 #endif
@@ -96,6 +103,10 @@
 
 EGLAPI const char* eglQueryStringImplementationANDROID(EGLDisplay dpy, EGLint name);
 
+#ifdef MTK_MT6589
+// additional mtk utils
+#include "mediatek/SurfaceFlingerWatchDog.h"
+#endif
 namespace android {
 
 // This works around the lack of support for the sync framework on some
@@ -200,6 +211,15 @@ SurfaceFlinger::SurfaceFlinger()
     ALOGI_IF(mDebugRegion, "showupdates enabled");
     ALOGI_IF(mDebugDDMS, "DDMS debugging enabled");
 
+#ifdef MTK_MT6589
+    // init mtk data
+    mBootAnimationEnabled = true;
+    sContentsDirty = false;
+
+    // init properties setting first
+    setMTKProperties();
+#endif
+
 #ifdef SAMSUNG_HDMI_SUPPORT
     ALOGD(">>> Run service");
     android::SecTVOutService::instantiate();
@@ -218,6 +238,10 @@ void SurfaceFlinger::onFirstRef()
 
 SurfaceFlinger::~SurfaceFlinger()
 {
+#ifdef MTK_MT6589
+    // 20121003: mHwc should be deleted to avoid memory leak
+    delete mHwc;
+#endif
     EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     eglTerminate(display);
@@ -334,6 +358,11 @@ void SurfaceFlinger::bootFinished()
     // formerly we would just kill the process, but we now ask it to exit so it
     // can choose where to stop the animation.
     property_set("service.bootanim.exit", "1");
+#ifdef MTK_MT6589
+    // boot time profiling
+    ALOG(LOG_INFO,"boot","BOOTPROF:BootAnimation:End:%ld", long(ns2ms(systemTime())));
+    bootProf(0);
+#endif
 }
 
 void SurfaceFlinger::deleteTextureAsync(uint32_t texture) {
@@ -603,8 +632,19 @@ void SurfaceFlinger::init() {
     eglGetConfigAttrib(mEGLDisplay, mEGLConfig,
             EGL_NATIVE_VISUAL_ID, &mEGLNativeVisualId);
 
+#ifdef MTK_MT6589
+    // make sure 3D init success
+    if (mEGLContext == EGL_NO_CONTEXT)
+    {
+        ALOGE("FATAL: couldn't create EGLContext");
+        delete mHwc;
+        eglTerminate(mEGLDisplay);
+        exit(0);
+    }
+#else
     LOG_ALWAYS_FATAL_IF(mEGLContext == EGL_NO_CONTEXT,
             "couldn't create EGLContext");
+#endif
 
     // initialize our non-virtual displays
     for (size_t i=0 ; i<DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES ; i++) {
@@ -640,12 +680,16 @@ void SurfaceFlinger::init() {
     // (which may happens before we render something)
     getDefaultDisplayDevice()->makeCurrent(mEGLDisplay, mEGLContext);
 
+#ifdef MTK_MT6589
+    adjustPriority();
+    mWatchDogIndex = SFWatchDog::getInstance()->registerNodeName("SurfaceFlinger");
+#endif
     // start the EventThread
     sp<VSyncSource> vsyncSrc = new DispSyncSource(&mPrimaryDispSync,
             vsyncPhaseOffsetNs, true);
     mEventThread = new EventThread(vsyncSrc);
     sp<VSyncSource> sfVsyncSrc = new DispSyncSource(&mPrimaryDispSync,
-            sfVsyncPhaseOffsetNs, true);
+            sfVsyncPhaseOffsetNs, false);
     mSFEventThread = new EventThread(sfVsyncSrc);
     mEventQueue.setEventThread(mSFEventThread);
 
@@ -673,10 +717,15 @@ int32_t SurfaceFlinger::allocateHwcDisplayId(DisplayDevice::DisplayType type) {
 }
 
 void SurfaceFlinger::startBootAnim() {
+#ifdef MTK_MT6589
+    // dynamic disable/enable boot animation
+    checkEnableBootAnim();
+#else
     // start boot animation
     mBootFinished = false;
     property_set("service.bootanim.exit", "0");
     property_set("ctl.start", "bootanim");
+#endif
 }
 
 size_t SurfaceFlinger::getMaxTextureSize() const {
@@ -749,6 +798,12 @@ status_t SurfaceFlinger::getDisplayInfo(const sp<IBinder>& display, DisplayInfo*
         // TODO: this needs to go away (currently needed only by webkit)
         sp<const DisplayDevice> hw(getDefaultDisplayDevice());
         info->orientation = hw->getOrientation();
+#ifdef MTK_MT6589
+    } else if (HWC_DISPLAY_SMARTBOOK == hwc.getSubType(type)) {
+        static const int SMB_DENSITY = 160;
+        info->density = SMB_DENSITY / 160.0f;
+        info->orientation = 0;
+#endif
     } else {
         // TODO: where should this value come from?
         static const int TV_DENSITY = 213;
@@ -774,6 +829,17 @@ status_t SurfaceFlinger::getDisplayInfo(const sp<IBinder>& display, DisplayInfo*
     // All non-virtual displays are currently considered secure.
     info->secure = true;
 
+#ifdef MTK_MT6589
+    // swap width/height for hw orientation to normalize graphic plane
+    if (DisplayDevice::DISPLAY_PRIMARY == type) {
+        int hw_orientation = getDefaultDisplayDevice()->getHwOrientation();
+        if ((DisplayState::eOrientation90 == hw_orientation) || (DisplayState::eOrientation270 == hw_orientation)) {
+            int tmp = info->w;
+            info->w = info->h;
+            info->h = tmp;
+        }
+    }
+#endif
     return NO_ERROR;
 }
 
@@ -914,7 +980,13 @@ void SurfaceFlinger::eventControl(int disp, int event, int enabled) {
 }
 
 void SurfaceFlinger::onMessageReceived(int32_t what) {
+#ifdef MTK_MT6589
+    // start watchdog
+    sp<SFWatchDog> watchDog(SFWatchDog::getInstance());
+    watchDog->markStartTransactionTime(mWatchDogIndex);
+#else
     ATRACE_CALL();
+#endif
     switch (what) {
     case MessageQueue::TRANSACTION:
         handleMessageTransaction();
@@ -928,6 +1000,10 @@ void SurfaceFlinger::onMessageReceived(int32_t what) {
         handleMessageRefresh();
         break;
     }
+#ifdef MTK_MT6589
+    // stop watchdog
+    watchDog->unmarkStartTransactionTime(mWatchDogIndex);
+#endif
 }
 
 void SurfaceFlinger::handleMessageTransaction() {
@@ -1105,6 +1181,12 @@ void SurfaceFlinger::rebuildLayerStacks() {
                 SurfaceFlinger::computeVisibleRegions(dpyId, layers,
                         hw->getLayerStack(), dirtyRegion, opaqueRegion);
 
+#ifdef MTK_MT6589
+                // LazySwap(2) draw and swap if content updated
+                // (by transaction) in drawing state
+                hw->mLayersSwapRequired |= sContentsDirty;
+                sContentsDirty = false;
+#endif
                 const size_t count = layers.size();
                 for (size_t i=0 ; i<count ; i++) {
                     const sp<Layer>& layer(layers[i]);
@@ -1212,6 +1294,10 @@ void SurfaceFlinger::setUpHWComposer() {
                                             SurfaceFlinger::EVENT_ORIENTATION,
                                             uint32_t(draw[i].orientation));
                             }
+#ifdef MTK_MT6589
+                // fill mirror information
+                hwc.setDisplayMirrorId(id, hw->getHwcMirrorId());
+#endif
                         }
                         if(!strncmp(layer->getName(), "SurfaceView",
                                     11)) {
@@ -1227,12 +1313,35 @@ void SurfaceFlinger::setUpHWComposer() {
 
         for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
             sp<const DisplayDevice> hw(mDisplays[dpy]);
+#ifdef MTK_MT6589
+            // check if any previous layer is processed by gles
+            const int32_t id = hw->getHwcDisplayId();
+            const bool prevGlesComposition = hwc.hasGlesComposition(id);
+#endif
             hw->prepareFrame(hwc);
+#ifdef MTK_MT6589
+            // do not render transparent region if unnecessary
+            checkLayersSwapRequired(hw, prevGlesComposition);
+            hw->mLayersSwapRequired = (true == sPropertiesState.mBusySwap) ?
+                                          true : hw->mLayersSwapRequired;
+
+            if (CC_UNLIKELY(sPropertiesState.mLogRepaint)) {
+                ALOGD("@ disp(%d) layerswap:%d", dpy, hw->mLayersSwapRequired);
+            }
+#endif
         }
     }
 }
 
 void SurfaceFlinger::doComposition() {
+#ifdef MTK_MT6589
+    // to slow down FPS
+    if (CC_UNLIKELY(0 != sPropertiesState.mDelayTime)) {
+        ALOGI("SurfaceFlinger slow motion timer: %d ms",
+              sPropertiesState.mDelayTime);
+        usleep(1000 * sPropertiesState.mDelayTime);
+    }
+#endif
     ATRACE_CALL();
     const bool repaintEverything = android_atomic_and(0, &mRepaintEverything);
     for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
@@ -1683,6 +1792,13 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
     // some layers might have been removed, so
     // we need to update the regions they're exposing.
     if (mLayersRemoved) {
+#ifdef MTK_MT6589
+        // LazySwap(1) draw and swap if layer removed
+        for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
+            sp<DisplayDevice> hw(mDisplays[dpy]);
+            hw->mLayersSwapRequired = true;
+        }
+#endif
         mLayersRemoved = false;
         mVisibleRegionsDirty = true;
         const size_t count = layers.size();
@@ -1864,6 +1980,11 @@ void SurfaceFlinger::computeVisibleRegions(size_t dpy,
         // subtract the opaque region covered by the layers above us
         visibleRegion.subtractSelf(aboveOpaqueLayers);
 
+#ifdef MTK_MT6589
+        // LazySwap(2) draw and swap if content updated
+        // (by transaction) in drawing state
+        sContentsDirty |= layer->contentDirty;
+#endif
         // compute this layer's dirty region
         if (layer->contentDirty) {
             // we need to invalidate the whole region
@@ -1920,6 +2041,10 @@ void SurfaceFlinger::invalidateLayerStack(uint32_t layerStack,
 
 void SurfaceFlinger::handlePageFlip()
 {
+#ifdef MTK_MT6589
+    // wait for dump thread
+    Mutex::Autolock _l(mDumpLock);
+#endif
     Region dirtyRegion;
 
     bool visibleRegions = false;
@@ -1933,6 +2058,19 @@ void SurfaceFlinger::handlePageFlip()
     }
 
     mVisibleRegionsDirty |= visibleRegions;
+#ifdef MTK_MT6589
+    for (size_t i=0 ; i<count ; i++) {
+        const sp<Layer>& layer(layers[i]);
+        if (layer->mTransparentRegionsDirty) {
+            // LazySwap(8) draw and swap if visible region is changed
+            for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
+                sp<DisplayDevice> hw(mDisplays[dpy]);
+                hw->mLayersSwapRequired = true;
+            }
+            break;
+        }
+    }
+#endif
 }
 
 void SurfaceFlinger::invalidateHwcGeometry()
@@ -1944,8 +2082,11 @@ void SurfaceFlinger::invalidateHwcGeometry()
 void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
         const Region& inDirtyRegion)
 {
-#ifdef MTK_HARDWARE
-    if (hw->getDisplayType() != HWC_DISPLAY_PRIMARY && inDirtyRegion.isEmpty()) {
+#ifdef MTK_MT6589
+    // a shortcut if nothing to update at all
+    if (true == inDirtyRegion.isEmpty()) {
+        ALOGI("Skip composition for [%s (type:%d)] since dirtyRegion is empty",
+            hw->getDisplayName().string(), hw->getDisplayType());
         return;
     }
 #endif
@@ -2584,6 +2725,27 @@ void SurfaceFlinger::initializeDisplays() {
     postMessageAsync(msg);  // we may be called from main thread, use async message
 }
 
+#ifdef MTK_MT6589
+// AED Exported Functions
+static int aeeWDTKick(int value)
+{
+    int ret = 0;
+    int fd = open(AE_WDT_POWERKEY_DEVICE_PATH, O_RDONLY);
+    if (fd < 0) {
+        ALOGD("Failed to open %s !!", AE_WDT_DEVICE_PATH);
+        return 1;
+    } else {
+        //ALOGD("SurfaceFlinger:AEEIOCTL_WDT_Kick setIOCTL,value=%x",value);
+        if (ioctl(fd, AEEIOCTL_WDT_KICK_POWERKEY, (int)value) != 0) {
+            ALOGD("Failed call AEEIOCTL_WDT_KICK_POWERKEY !!");
+            close(fd);
+            return 1;
+        }
+    }
+    close(fd);
+    return ret;
+}
+#endif
 
 void SurfaceFlinger::onScreenAcquired(const sp<const DisplayDevice>& hw) {
     ALOGD("Screen acquired, type=%d flinger=%p", hw->getDisplayType(), this);
@@ -2593,21 +2755,48 @@ void SurfaceFlinger::onScreenAcquired(const sp<const DisplayDevice>& hw) {
         return;
     }
 
+#ifdef MTK_MT6589
+    // tracking screen unblank
+    ATRACE_CALL();
+    aeeWDTKick(WDT_SETBY_SF);
+#endif
     hw->acquireScreen();
     int32_t type = hw->getDisplayType();
     if (type < DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES) {
         // built-in display, tell the HWC
         getHwComposer().acquire(type);
 
+#ifdef MTK_MT6589
+        const HWComposer& hwc(getHwComposer());
+        if (HWC_DISPLAY_SMARTBOOK == hwc.getSubType(DisplayDevice::DISPLAY_EXTERNAL)) {
+            if (type == DisplayDevice::DISPLAY_PRIMARY || type == DisplayDevice::DISPLAY_EXTERNAL) {
+                mEventThread->onScreenAcquired();
+                resyncToHardwareVsync(true);
+                SFWatchDog::getInstance()->screenAcquired();
+            }
+        } else if (type == DisplayDevice::DISPLAY_PRIMARY) {
+            mEventThread->onScreenAcquired();
+            resyncToHardwareVsync(true);
+            SFWatchDog::getInstance()->screenAcquired();
+        }
+#else
         if (type == DisplayDevice::DISPLAY_PRIMARY) {
             // FIXME: eventthread only knows about the main display right now
             mEventThread->onScreenAcquired();
 
             resyncToHardwareVsync(true);
         }
+#endif
     }
     mVisibleRegionsDirty = true;
+#ifdef MTK_MT6589
+    // do not refresh screen when acquired while booting
+    if (true == mBootFinished) {
     repaintEverything();
+}
+#else
+    repaintEverything();
+#endif
 }
 
 void SurfaceFlinger::onScreenReleased(const sp<const DisplayDevice>& hw) {
@@ -2617,15 +2806,40 @@ void SurfaceFlinger::onScreenReleased(const sp<const DisplayDevice>& hw) {
         return;
     }
 
+#ifdef MTK_MT6589
+    // tracking screen blank
+    ATRACE_CALL();
+    aeeWDTKick(WDT_SETBY_SF);
+#endif
     hw->releaseScreen();
     int32_t type = hw->getDisplayType();
     if (type < DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES) {
+#ifdef MTK_MT6589
+        const HWComposer& hwc(getHwComposer());
+        if (HWC_DISPLAY_SMARTBOOK == hwc.getSubType(DisplayDevice::DISPLAY_EXTERNAL)) {
+            if (type == DisplayDevice::DISPLAY_PRIMARY || type == DisplayDevice::DISPLAY_EXTERNAL) {
+                // release screen when all phyical displays are released
+                wp<IBinder> token = mBuiltinDisplays[type^1];
+                const sp<DisplayDevice> hw2(getDisplayDevice(token));
+                if (!hw2.get() || !hw2->isScreenAcquired()) {
+                    SFWatchDog::getInstance()->screenReleased();
+                    disableHardwareVsync(true); // also cancels any in-progress resync
+                    mEventThread->onScreenReleased();
+                }
+            }
+        } else if (type == DisplayDevice::DISPLAY_PRIMARY) {
+            SFWatchDog::getInstance()->screenReleased();
+            disableHardwareVsync(true); // also cancels any in-progress resync
+            mEventThread->onScreenReleased();
+        }
+#else
         if (type == DisplayDevice::DISPLAY_PRIMARY) {
             disableHardwareVsync(true); // also cancels any in-progress resync
 
             // FIXME: eventthread only knows about the main display right now
             mEventThread->onScreenReleased();
         }
+#endif
 
         // built-in display, tell the HWC
         getHwComposer().release(type);
@@ -2655,6 +2869,11 @@ void SurfaceFlinger::unblank(const sp<IBinder>& display) {
     };
     sp<MessageBase> msg = new MessageScreenAcquired(*this, display);
     postMessageSync(msg);
+#ifdef MTK_MT6589
+    // notify IPO for black screen sync issue
+    usleep(16667);
+    property_set("sys.ipowin.done", "1");
+#endif
 }
 
 void SurfaceFlinger::blank(const sp<IBinder>& display) {
@@ -2732,6 +2951,16 @@ status_t SurfaceFlinger::dump(int fd, const Vector<String16>& args)
                 clearStatsLocked(args, index, result);
                 dumpAll = false;
             }
+#ifdef MTK_MT6589
+            if ((index < numArgs) &&
+                    (args[index] == String16("--mtk"))) {
+                index++;
+                clearStatsLocked(args, index, result);
+                // for run-time enable property
+                setMTKProperties(result);
+                dumpAll = false;
+            }
+#endif
         }
 
         if (dumpAll) {
@@ -2862,6 +3091,12 @@ void SurfaceFlinger::dumpAllLocked(const Vector<String16>& args, size_t& index,
     nsecs_t inSwapBuffersDuration = (inSwapBuffers) ? now-inSwapBuffers : 0;
     nsecs_t inTransactionDuration = (inTransaction) ? now-inTransaction : 0;
 
+#ifdef MTK_MT6589
+    Mutex::Autolock _l(mDumpLock);
+
+    // for data dump
+    system("mkdir /data/SF_dump");
+#endif
     /*
      * Dump library configuration.
      */
@@ -3143,6 +3378,13 @@ status_t SurfaceFlinger::onTransact(
 }
 
 void SurfaceFlinger::repaintEverything() {
+#ifdef MTK_MT6589
+    // LazySwap(7) draw and swap if region is invalidated
+    for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
+        sp<DisplayDevice> hw(mDisplays[dpy]);
+        hw->mLayersSwapRequired = true;
+    }
+#endif
     android_atomic_or(1, &mRepaintEverything);
     signalTransaction();
 }
@@ -3288,6 +3530,21 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
 #ifdef USE_MHEAP_SCREENSHOT
             if (!useReadPixels) {
 #endif
+#ifdef MTK_MT6589
+            int usage;
+            producer->query(NATIVE_WINDOW_CONSUMER_USAGE_BITS, &usage);
+            if (usage & GRALLOC_USAGE_SW_READ_OFTEN) {
+                result = flinger->captureScreenImplLocked(hw,
+                        producer, reqWidth, reqHeight, minLayerZ, maxLayerZ, useReadPixels);
+                static_cast<GraphicProducerWrapper*>(producer->asBinder().get())->exit(result);
+            } else {
+                // to resolve the side effects when suffering from performance,
+                // make captureScreen() be an aysnchronous function call
+                static_cast<GraphicProducerWrapper*>(producer->asBinder().get())->exit(NO_ERROR);
+                result = flinger->captureScreenImplLocked(hw,
+                        producer, reqWidth, reqHeight, minLayerZ, maxLayerZ, useReadPixels);
+            }
+#else
                 result = flinger->captureScreenImplLocked(hw,
                         producer, reqWidth, reqHeight, minLayerZ, maxLayerZ,
                         useReadPixels);
@@ -3298,6 +3555,7 @@ status_t SurfaceFlinger::captureScreen(const sp<IBinder>& display,
             }
 #endif
             static_cast<GraphicProducerWrapper*>(producer->asBinder().get())->exit(result);
+#endif
             return true;
         }
     };
@@ -3347,7 +3605,11 @@ void SurfaceFlinger::renderScreenImplLocked(
     engine.checkErrors();
 
     // set-up our viewport
+#ifdef MTK_MT6589
+    engine.setViewportAndProjection(hw, reqWidth, reqHeight);
+#else
     engine.setViewportAndProjection(reqWidth, reqHeight, hw_w, hw_h, yswap);
+#endif
     engine.disableTexturing();
 
     // redraw the screen entirely...
@@ -3376,6 +3638,10 @@ void SurfaceFlinger::renderScreenImplLocked(
         }
     }
 
+#ifdef MTK_MT6589
+    if (CC_UNLIKELY(sPropertiesState.mLineScreenShot))
+        engine.drawDebugLine(hw_w, hw_h);
+#endif
     // compositionComplete is needed for older driver
     hw->compositionComplete();
     hw->setViewportAndProjection();
@@ -3391,9 +3657,19 @@ status_t SurfaceFlinger::captureScreenImplLocked(
 {
     ATRACE_CALL();
 
+#ifdef MTK_MT6589
+    // get screen geometry
+    uint32_t hw_w = hw->getWidth();
+    uint32_t hw_h = hw->getHeight();
+
+    // swap for HW rotation
+    if (hw->getHwOrientation() & DisplayState::eOrientationSwapMask)
+        swap(hw_w, hw_h);
+#else
     // get screen geometry
     const uint32_t hw_w = hw->getWidth();
     const uint32_t hw_h = hw->getHeight();
+#endif
 
     if ((reqWidth > hw_w) || (reqHeight > hw_h)) {
         ALOGE("size mismatch (%d, %d) > (%d, %d)",
@@ -3431,6 +3707,9 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                 // turn it into a texture
                 EGLImageKHR image = eglCreateImageKHR(mEGLDisplay, EGL_NO_CONTEXT,
                         EGL_NATIVE_BUFFER_ANDROID, buffer, NULL);
+#ifdef MTK_MT6589
+                int fenceFd = -1;
+#endif
                 if (image != EGL_NO_IMAGE_KHR) {
                     // this binds the given EGLImage as a framebuffer for the
                     // duration of this scope.
@@ -3443,6 +3722,10 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                         renderScreenImplLocked(hw, reqWidth, reqHeight,
                                 minLayerZ, maxLayerZ, true);
 
+#ifdef MTK_MT6589
+                        int usage;
+                        producer->query(NATIVE_WINDOW_CONSUMER_USAGE_BITS, &usage);
+                        if (usage & GRALLOC_USAGE_SW_READ_OFTEN) {
                         // Create a sync point and wait on it, so we know the buffer is
                         // ready before we pass it along.  We can't trivially call glFlush(),
                         // so we use a wait flag instead.
@@ -3463,6 +3746,49 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                             ALOGW("captureScreen: error creating EGL fence: %#x", eglGetError());
                             // not fatal
                         }
+
+                        } else {
+                            if (SyncFeatures::getInstance().useNativeFenceSync()) {
+                                EGLSyncKHR sync = eglCreateSyncKHR(mEGLDisplay,
+                                        EGL_SYNC_NATIVE_FENCE_ANDROID, NULL);
+                                if (sync == EGL_NO_SYNC_KHR) {
+                                    ALOGW("captureScreen: error creating EGL fence: %#x", eglGetError());
+                                    // not fatal
+                                } else {
+                                    fenceFd = eglDupNativeFenceFDANDROID(mEGLDisplay, sync);
+                                    eglDestroySyncKHR(mEGLDisplay, sync);
+                                    if (fenceFd == EGL_NO_NATIVE_FENCE_FD_ANDROID) {
+                                        ALOGW("captureScreen: error dup'ing native fence "
+                                                "fd: %#x", eglGetError());
+                                        // not fatal
+                                    }
+                                }
+                            } else {
+                                ALOGW("captureScreen: no native fence created");
+                            }
+                        }
+#else
+                        // Create a sync point and wait on it, so we know the buffer is
+                        // ready before we pass it along.  We can't trivially call glFlush(),
+                        // so we use a wait flag instead.
+                        // TODO: pass a sync fd to queueBuffer() and let the consumer wait.
+                        EGLSyncKHR sync = eglCreateSyncKHR(mEGLDisplay, EGL_SYNC_FENCE_KHR, NULL);
+                        if (sync != EGL_NO_SYNC_KHR) {
+                            EGLint result = eglClientWaitSyncKHR(mEGLDisplay, sync,
+                                    EGL_SYNC_FLUSH_COMMANDS_BIT_KHR, 2000000000 /*2 sec*/);
+                            EGLint eglErr = eglGetError();
+                            eglDestroySyncKHR(mEGLDisplay, sync);
+                            if (result == EGL_TIMEOUT_EXPIRED_KHR) {
+                                ALOGW("captureScreen: fence wait timed out");
+                            } else {
+                                ALOGW_IF(eglErr != EGL_SUCCESS,
+                                        "captureScreen: error waiting on EGL fence: %#x", eglErr);
+                            }
+                        } else {
+                            ALOGW("captureScreen: error creating EGL fence: %#x", eglGetError());
+                            // not fatal
+                        }
+#endif
 
                         if (useReadPixels) {
                             sp<GraphicBuffer> buf = static_cast<GraphicBuffer*>(buffer);
@@ -3490,7 +3816,11 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                 } else {
                     result = BAD_VALUE;
                 }
+#ifdef MTK_MT6589
+                window->queueBuffer(window, buffer, fenceFd);
+#else
                 window->queueBuffer(window, buffer, -1);
+#endif
             }
         } else {
             result = BAD_VALUE;

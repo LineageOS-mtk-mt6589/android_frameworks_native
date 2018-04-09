@@ -64,6 +64,10 @@ class EventThread : public Thread, private VSyncSource::Callback {
         // count ==-1 : one-shot event that fired this round / disabled
         int32_t count;
 
+#ifdef MTK_MT6589
+        // reserve client pid infomation
+        int32_t pid;
+#endif
     private:
         virtual ~Connection();
         virtual void onFirstRef();

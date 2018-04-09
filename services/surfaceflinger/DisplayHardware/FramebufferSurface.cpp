@@ -58,7 +58,12 @@ FramebufferSurface::FramebufferSurface(HWComposer& hwc, int disp,
     mCurrentBuffer(0),
     mHwc(hwc)
 {
+#ifdef MTK_MT6589
+    // add type info in name for different physical types
+    mName = String8::format("FrameBufferSurface_%d", mDisplayType);
+#else
     mName = "FramebufferSurface";
+#endif
     mConsumer->setConsumerName(mName);
     mConsumer->setConsumerUsageBits(GRALLOC_USAGE_HW_FB |
                                        GRALLOC_USAGE_HW_RENDER |

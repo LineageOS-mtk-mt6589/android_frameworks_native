@@ -78,7 +78,11 @@ VirtualDisplaySurface::VirtualDisplaySurface(HWComposer& hwc, int32_t dispId,
         sink->query(NATIVE_WINDOW_FORMAT, &sinkFormat);
         mDefaultOutputFormat = sinkFormat;
     } else {
+#ifdef MTK_MT6589
+        mDefaultOutputFormat = HAL_PIXEL_FORMAT_RGBA_8888;
+#else
         mDefaultOutputFormat = HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED;
+#endif
     }
     mOutputFormat = mDefaultOutputFormat;
 

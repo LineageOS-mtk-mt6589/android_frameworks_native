@@ -86,6 +86,15 @@ protected:
 
     virtual size_t getMaxTextureSize() const;
     virtual size_t getMaxViewportDims() const;
+#ifdef MTK_MT6589
+private:
+    virtual uint32_t createProtectedImageTextureLocked();
+
+protected:
+    virtual void setupLayerProtectedImage();
+    virtual void setViewportAndProjection(const sp<const DisplayDevice>& hw,
+            size_t vpw, size_t vph);
+#endif
 };
 
 // ---------------------------------------------------------------------------

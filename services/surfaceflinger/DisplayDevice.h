@@ -33,6 +33,9 @@
 
 #include "Transform.h"
 
+#ifdef MTK_MT6589
+#include <gui/mediatek/FpsCounter.h>
+#endif
 struct ANativeWindow;
 
 namespace android {
@@ -222,6 +225,29 @@ private:
     Rect mScissor;
     Transform mGlobalTransform;
     bool mNeedsFiltering;
+#ifdef MTK_MT6589
+private:
+    // debugging
+    void drawDebugLine() const;
+
+    int mHwOrientation;
+
+    // for performance check
+    mutable FpsCounter mFps;
+
+    // which display could be mirrored
+    int32_t mHwcMirrorId;
+
+public:
+    int getHwOrientation() const { return mHwOrientation; }
+
+    int32_t getHwcMirrorId() const { return mHwcMirrorId; }
+    void setHwcMirrorId(int32_t mirrorId) { mHwcMirrorId = mirrorId; }
+
+    // for lazy swap
+    mutable bool mLayersSwapRequired;
+    mutable int mCurrFbLayers;
+#endif
 };
 
 }; // namespace android

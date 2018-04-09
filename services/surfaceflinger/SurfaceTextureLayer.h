@@ -38,6 +38,18 @@ class SurfaceTextureLayer : public BufferQueue {
 public:
     SurfaceTextureLayer(const sp<SurfaceFlinger>& flinger);
     virtual ~SurfaceTextureLayer();
+#ifdef MTK_MT6589
+public:
+    // for get real type
+    virtual int32_t getType() const {
+        return BufferQueue::TYPE_SurfaceTextureLayer;
+    }
+
+    // for buffer log
+    virtual status_t queueBuffer(int buf,
+                                 const QueueBufferInput& input,
+                                 QueueBufferOutput* output);
+#endif
 };
 
 // ---------------------------------------------------------------------------
