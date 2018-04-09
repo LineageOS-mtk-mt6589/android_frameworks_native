@@ -34,6 +34,11 @@
 #include <utils/Vector.h>
 #include <utils/threads.h>
 
+#ifdef MTK_MT6589
+#include <gui/mediatek/FpsCounter.h>
+#include <gui/mediatek/BufferQueueDump.h>
+#define LOCK_FOR_SW (GRALLOC_USAGE_SW_READ_RARELY | GRALLOC_USAGE_SW_WRITE_RARELY | GRALLOC_USAGE_HW_TEXTURE)
+#endif
 namespace android {
 // ----------------------------------------------------------------------------
 
@@ -575,6 +580,53 @@ private:
 
     // mConnectedProducerToken is used to set a binder death notification on the producer
     sp<IBinder> mConnectedProducerToken;
+#ifdef MTK_MT6589
+private:
+    // track for producer buffer return
+    FpsCounter mQueueFps;
+
+    // track for consumer buffer return
+    FpsCounter mReleaseFps;
+
+    // if debug line enabled
+    bool mLine;
+
+    // debug line count
+    uint32_t mLineCnt;
+
+    // for buffer dump
+    sp<BufferQueueDump> mDump;
+
+    // id for this buffer queue
+    int32_t mId;
+
+    // pids of producer and consumer
+    int mProducerPid;
+    int mConsumerPid;
+
+    // get process name from a given pid
+    status_t getProcessName(int pid, String8& name);
+
+public:
+    // for real type check
+    enum {
+        TYPE_BufferQueue = IGraphicBufferConsumer::TYPE_BufferQueue,
+        TYPE_SurfaceTextureLayer = IGraphicBufferConsumer::TYPE_SurfaceTextureLayer,
+    };
+    virtual int32_t getType() const { return TYPE_BufferQueue; }
+
+    // get connected api type for debug purpose
+    int32_t getConnectedApi() const { return mConnectedApi; }
+
+    // get name for more info
+    String8 getConsumerName() const { return mConsumerName; }
+    int getProducerPid() { return mProducerPid; };
+    int getConsumerPid() { return mConsumerPid; };
+
+    // add debug line to given GraphicBuffer
+    // cnt will auto mod to 32
+    static status_t DrawDebugLineToGraphicBuffer(sp<GraphicBuffer> gb, uint32_t cnt, uint8_t val = 0xff);
+#endif
 };
 
 // ----------------------------------------------------------------------------

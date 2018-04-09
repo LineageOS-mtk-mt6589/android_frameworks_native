@@ -30,6 +30,11 @@ namespace android {
 class Parcel;
 class ISurfaceComposerClient;
 
+#ifdef MTK_MT6589
+// declare IGraphicBufferProducer to avoid build fail
+class IBinder;
+class IGraphicBufferProducer;
+#endif
 struct layer_state_t {
 
 
@@ -49,6 +54,31 @@ struct layer_state_t {
         eCropChanged                = 0x00000100,
     };
 
+#ifdef MTK_MT6589
+    // ENUMs for flagsEx values.
+    // These value MUST be the same as defined in java domain code (in WindowManager.java)
+    enum {
+        eExInvalid           = 0x80000000,   // as need to update
+
+        // BYTE#3 LOW4 for PQ control
+        eExPQ_Mask          = 0x01000000,   // for PQ on/off
+        eExPQ_On            = 0x01000000,
+
+        eExPQ_Reserved_Mask = 0x0E000000,   // reserved
+        eExPQ_Reserved_bit0 = 0x02000000,
+        eExPQ_Reserved_bit1 = 0x04000000,
+        eExPQ_Reserved_bit2 = 0x08000000,
+
+        // BYTE#2 no use now
+
+        // BYTE#1 no use now
+
+        // BYTE#0 no use now
+
+        // for layer init
+        eExInitValue = 0x00000000,
+    };
+#endif
     layer_state_t()
         :   what(0),
             x(0), y(0), z(0), w(0), h(0), layerStack(0),
@@ -58,6 +88,11 @@ struct layer_state_t {
         matrix.dsdx = matrix.dtdy = 1.0f;
         matrix.dsdy = matrix.dtdx = 0.0f;
         crop.makeInvalid();
+#ifdef MTK_MT6589
+        // For setting extra surface flags
+        flagsEx = 0x00000000;
+        maskEx = 0x00000000;
+#endif
     }
 
     status_t    write(Parcel& output) const;
@@ -83,6 +118,11 @@ struct layer_state_t {
             uint8_t         reserved;
             matrix22_t      matrix;
             Rect            crop;
+#ifdef MTK_MT6589
+            // For setting extra surface flags
+            uint32_t        flagsEx;
+            uint32_t        maskEx;
+#endif
             // non POD must be last. see write/read
             Region          transparentRegion;
 };

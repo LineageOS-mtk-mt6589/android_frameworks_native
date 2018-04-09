@@ -39,6 +39,9 @@ class DisplayInfo;
 class IDisplayEventConnection;
 class IMemoryHeap;
 
+#ifdef MTK_MT6589
+class DisplayInfoEx;
+#endif
 /*
  * This class defines the Binder IPC interface for accessing various
  * SurfaceFlinger features.
@@ -132,6 +135,9 @@ public:
             uint32_t reqWidth, uint32_t reqHeight,
             uint32_t minLayerZ, uint32_t maxLayerZ) = 0;
 #endif
+#ifdef MTK_MT6589
+    virtual status_t getDisplayInfoEx(const sp<IBinder>& display, DisplayInfoEx* info) = 0;
+#endif
 };
 
 // ----------------------------------------------------------------------------
@@ -158,6 +164,9 @@ public:
         GET_DISPLAY_INFO,
         CONNECT_DISPLAY,
         CAPTURE_SCREEN,
+#ifdef MTK_MT6589
+        GET_DISPLAY_INFO_EX,
+#endif
     };
 
     virtual status_t onTransact(uint32_t code, const Parcel& data,

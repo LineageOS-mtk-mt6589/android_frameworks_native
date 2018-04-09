@@ -121,6 +121,10 @@ void ConsumerBase::onBuffersReleased() {
         return;
     }
 
+#ifdef MTK_MT6589
+    // force conversion here for last buffer
+    forceAuxConversionLocked();
+#endif
     uint32_t mask = 0;
     mConsumer->getReleasedBuffers(&mask);
     for (int i = 0; i < BufferQueue::NUM_BUFFER_SLOTS; i++) {

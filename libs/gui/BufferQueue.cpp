@@ -37,6 +37,31 @@
 #include <binder/PermissionCache.h>
 #include <private/android_filesystem_config.h>
 
+#ifdef MTK_MT6589
+#include <cutils/properties.h>
+#include <ui/gralloc_extra.h>
+#define ION_MM_DBG_NAME_LEN 16
+
+// Macros for including the BufferQueue name in log messages
+#define ST_LOGV(x, ...) ALOGV("[%s](this:%p,id:%d,api:%d,p:%d,c:%d) "x, mConsumerName.string(), this, mId, mConnectedApi, mProducerPid, mConsumerPid, ##__VA_ARGS__)
+#define ST_LOGD(x, ...) ALOGD("[%s](this:%p,id:%d,api:%d,p:%d,c:%d) "x, mConsumerName.string(), this, mId, mConnectedApi, mProducerPid, mConsumerPid, ##__VA_ARGS__)
+#define ST_LOGI(x, ...) ALOGI("[%s](this:%p,id:%d,api:%d,p:%d,c:%d) "x, mConsumerName.string(), this, mId, mConnectedApi, mProducerPid, mConsumerPid, ##__VA_ARGS__)
+#define ST_LOGW(x, ...) ALOGW("[%s](this:%p,id:%d,api:%d,p:%d,c:%d) "x, mConsumerName.string(), this, mId, mConnectedApi, mProducerPid, mConsumerPid, ##__VA_ARGS__)
+#define ST_LOGE(x, ...) ALOGE("[%s](this:%p,id:%d,api:%d,p:%d,c:%d) "x, mConsumerName.string(), this, mId, mConnectedApi, mProducerPid, mConsumerPid, ##__VA_ARGS__)
+
+#define ATRACE_BUFFER_INDEX(index)                                                  \
+    if (ATRACE_ENABLED()) {                                                         \
+        char ___traceBuf[1024];                                                     \
+        if (mSlots[index].mGraphicBuffer != NULL) {                                 \
+            snprintf(___traceBuf, 1024, "%s: %d (h:%p)", mConsumerName.string(),    \
+                (index), (mSlots[index].mGraphicBuffer->handle));                   \
+        } else {                                                                    \
+            snprintf(___traceBuf, 1024, "%s: %d", mConsumerName.string(),           \
+                (index));                                                           \
+        }                                                                           \
+        android::ScopedTrace ___bufTracer(ATRACE_TAG, ___traceBuf);                 \
+    }
+#else
 // Macros for including the BufferQueue name in log messages
 #define ST_LOGV(x, ...) ALOGV("[%s] "x, mConsumerName.string(), ##__VA_ARGS__)
 #define ST_LOGD(x, ...) ALOGD("[%s] "x, mConsumerName.string(), ##__VA_ARGS__)
@@ -51,6 +76,7 @@
                 (index));                                                     \
         android::ScopedTrace ___bufTracer(ATRACE_TAG, ___traceBuf);           \
     }
+#endif
 
 namespace android {
 
@@ -87,9 +113,18 @@ BufferQueue::BufferQueue(const sp<IGraphicBufferAlloc>& allocator) :
     mTransformHint(0)
 {
     // Choose a name using the PID and a process-unique ID.
-    mConsumerName = String8::format("unnamed-%d-%d", getpid(), createProcessUniqueId());
+#ifdef MTK_MT6589
+    // init pid of producer and consumer
+    // -1 : no one connects
+    mProducerPid = mConsumerPid = -1;
 
+    mId = createProcessUniqueId();
+    mConsumerName = String8::format("unnamed-%d-%d", getpid(), mId);
+    ST_LOGI("BufferQueue");
+#else
+    mConsumerName = String8::format("unnamed-%d-%d", getpid(), createProcessUniqueId());
     ST_LOGV("BufferQueue");
+#endif
     if (allocator == NULL) {
         sp<ISurfaceComposer> composer(ComposerService::getComposerService());
         mGraphicBufferAlloc = composer->createGraphicBufferAlloc();
@@ -99,6 +134,24 @@ BufferQueue::BufferQueue(const sp<IGraphicBufferAlloc>& allocator) :
     } else {
         mGraphicBufferAlloc = allocator;
     }
+#ifdef MTK_MT6589
+    mDump = new BufferQueueDump();
+    if (mDump == 0) {
+        ST_LOGE("new BufferQueueDump() failed in BufferQueue()");
+    }
+    // update dump name
+    mDump->setName(mConsumerName);
+
+    // check property for drawing debug line
+    char value[PROPERTY_VALUE_MAX];
+    property_get("debug.bq.line", value, "GOD'S IN HIS HEAVEN, ALL'S RIGHT WITH THE WORLD.");
+    mLine = (-1 != mConsumerName.find(value));
+    mLineCnt = 0;
+
+    if (true == mLine) {
+        ST_LOGI("switch on debug line");
+    }
+#endif
 }
 
 BufferQueue::~BufferQueue() {
@@ -119,6 +172,21 @@ status_t BufferQueue::setDefaultMaxBufferCountLocked(int count) {
 void BufferQueue::setConsumerName(const String8& name) {
     Mutex::Autolock lock(mMutex);
     mConsumerName = name;
+#ifndef MTK_DEFAULT_AOSP
+    // update dump info
+    mDump->setName(mConsumerName);
+
+    // check property for drawing debug line
+    ST_LOGI("setConsumerName: %s", mConsumerName.string());
+    char value[PROPERTY_VALUE_MAX];
+    property_get("debug.bq.line", value, "GOD'S IN HIS HEAVEN, ALL'S RIGHT WITH THE WORLD.");
+    mLine = (-1 != mConsumerName.find(value));
+    mLineCnt = 0;
+
+    if (true == mLine) {
+        ST_LOGI("switch on debug line");
+    }
+#endif
 }
 
 status_t BufferQueue::setDefaultBufferFormat(uint32_t defaultFormat) {
@@ -445,6 +513,13 @@ status_t BufferQueue::dequeueBuffer(int *outBuf, sp<Fence>* outFence, bool async
             ST_LOGE("dequeueBuffer: SurfaceComposer::createGraphicBuffer failed");
             return error;
         }
+#ifdef MTK_MT6589
+        else {
+            char infoMsg[ION_MM_DBG_NAME_LEN];
+            snprintf(infoMsg, sizeof(infoMsg), "p:%d c:%d", mProducerPid, mConsumerPid);
+            gralloc_extra_setBufInfo(graphicBuffer->handle, infoMsg);
+        }
+#endif
 
         { // Scope for the lock
             Mutex::Autolock lock(mMutex);
@@ -472,9 +547,14 @@ status_t BufferQueue::dequeueBuffer(int *outBuf, sp<Fence>* outFence, bool async
         eglDestroySyncKHR(dpy, eglFence);
     }
 
+#ifdef MTK_MT6589
+    // mark android original unsafe log here
+    // no lock protection, and not important info
+#else
     ST_LOGV("dequeueBuffer: returning slot=%d/%llu buf=%p flags=%#x", *outBuf,
             mSlots[*outBuf].mFrameNumber,
             mSlots[*outBuf].mGraphicBuffer->handle, returnFlags);
+#endif
 
     return returnFlags;
 }
@@ -567,6 +647,45 @@ status_t BufferQueue::queueBuffer(int buf,
             return -EINVAL;
         }
 
+#ifdef MTK_MT6589
+        // if queue not empty, means consumer is slower than producer
+        // * in sync mode, may cause lag (but size 1 should be OK for triple buffer)
+        // * in async mode, frame drop
+        bool dump_fifo = false;
+        if (!async) {
+            // fifo depth 1 is ok for triple buffer, but 2 would cause lag
+            if (1 < mQueue.size()) {
+//                ST_LOGI("[queue] queued:%d (lag)", mQueue.size());
+                dump_fifo = true;
+            }
+        } else {
+            // frame drop is fifo is not empty
+            if (0 < mQueue.size()) {
+//                ST_LOGI("[queue] queued:%d (drop frame)", mQueue.size());
+                dump_fifo = true;
+            }
+        }
+
+        // dump current fifo data, and the new coming one
+        if (true == dump_fifo) {
+            const BufferSlot *slot = &(mSlots[buf]);
+//            ST_LOGD("NEW [idx:%d] handle:%p",
+//                buf, slot->mGraphicBuffer->handle);
+
+            Fifo::const_iterator it(mQueue.begin());
+            Fifo::const_iterator const end(mQueue.end());
+            while (it != end) {
+                const BufferItem& b = *it++;
+                slot = &(mSlots[b.mBuf]);
+//                if (slot->mGraphicBuffer != NULL) {
+//                    ST_LOGD("    [idx:%d] handle:%p",
+//                        b.mBuf, slot->mGraphicBuffer->handle);
+//                } else {
+//                    ST_LOGD("    [idx:%d] gb:NULL", b.mBuf);
+//                }
+            }
+        }
+#endif
         mSlots[buf].mFence = fence;
         mSlots[buf].mBufferState = BufferSlot::QUEUED;
         mFrameCounter++;
@@ -662,8 +781,18 @@ void BufferQueue::cancelBuffer(int buf, const sp<Fence>& fence) {
 status_t BufferQueue::connect(const sp<IBinder>& token,
         int api, bool producerControlledByApp, QueueBufferOutput* output) {
     ATRACE_CALL();
+#ifdef MTK_MT6589
+    // check if local or remote connection by the token from producer
+    // (in most cases, producer side is a remote connection)
+    mProducerPid = (NULL != token->localBinder())
+                 ? getpid()
+                 : IPCThreadState::self()->getCallingPid();
+
+    String8 name;
+#else
     ST_LOGV("connect: api=%d producerControlledByApp=%s", api,
             producerControlledByApp ? "true" : "false");
+#endif
     Mutex::Autolock lock(mMutex);
 
 retry:
@@ -738,6 +867,9 @@ void BufferQueue::binderDied(const wp<IBinder>& who) {
 
 status_t BufferQueue::disconnect(int api) {
     ATRACE_CALL();
+#ifdef MTK_MT6589
+    mProducerPid = -1;
+#endif
     ST_LOGV("disconnect: api=%d", api);
 
     int err = NO_ERROR;
@@ -809,6 +941,17 @@ void BufferQueue::dump(String8& result, const char* prefix) const {
     int fifoSize = 0;
     Fifo::const_iterator i(mQueue.begin());
     while (i != mQueue.end()) {
+#ifdef MTK_MT6589
+        // adjust fifo log to improve readability
+        fifo.appendFormat("\n%s    %02d:%p crop=[%d,%d,%d,%d], "
+                "xform=0x%02x, time=%#llx, scale=%s",
+                prefix,
+                i->mBuf, i->mGraphicBuffer.get(),
+                i->mCrop.left, i->mCrop.top, i->mCrop.right,
+                i->mCrop.bottom, i->mTransform, i->mTimestamp,
+                scalingModeName(i->mScalingMode)
+                );
+#else
         fifo.appendFormat("%02d:%p crop=[%d,%d,%d,%d], "
                 "xform=0x%02x, time=%#llx, scale=%s\n",
                 i->mBuf, i->mGraphicBuffer.get(),
@@ -816,6 +959,7 @@ void BufferQueue::dump(String8& result, const char* prefix) const {
                 i->mCrop.bottom, i->mTransform, i->mTimestamp,
                 scalingModeName(i->mScalingMode)
                 );
+#endif
         i++;
         fifoSize++;
     }
@@ -867,6 +1011,9 @@ void BufferQueue::dump(String8& result, const char* prefix) const {
         }
         result.append("\n");
     }
+#ifdef MTK_MT6589
+    mDump->dumpBuffer();
+#endif
 }
 
 void BufferQueue::freeBufferLocked(int slot) {
@@ -885,6 +1032,10 @@ void BufferQueue::freeBufferLocked(int slot) {
         mSlots[slot].mEglFence = EGL_NO_SYNC_KHR;
     }
     mSlots[slot].mFence = Fence::NO_FENCE;
+#ifdef MTK_MT6589
+    // update dump buffer
+    mDump->onFreeBuffer(slot);
+#endif
 }
 
 void BufferQueue::freeAllBuffersLocked() {
@@ -1019,6 +1170,20 @@ status_t BufferQueue::acquireBuffer(BufferItem *buffer, nsecs_t expectedPresent)
         buffer->mGraphicBuffer = NULL;
     }
 
+#ifdef MTK_MT6589
+    // hold acquired GraphicBuffer
+    mDump->onAcquireBuffer(buf, front->mGraphicBuffer, front->mFence, front->mTimestamp);
+
+    // draw white debug line
+    if (true == mLine) {
+
+        if (buffer->mFence.get())
+            buffer->mFence->waitForever("BufferItemConsumer::acquireBuffer");
+
+        DrawDebugLineToGraphicBuffer(front->mGraphicBuffer, mLineCnt);
+        mLineCnt += 1;
+    }
+#endif
     mQueue.erase(front);
     mDequeueCondition.broadcast();
 
@@ -1075,13 +1240,43 @@ status_t BufferQueue::releaseBuffer(
     }
 
     mDequeueCondition.broadcast();
+#ifdef MTK_MT6589
+    // count FPS after releaseBuffer() success, for consumer side
+//    if (true == mReleaseFps.update()) {
+//        ST_LOGI("[release] fps:%.2f, dur:%.2f, max:%.2f, min:%.2f",
+//            mReleaseFps.getFps(),
+//            mReleaseFps.getLastLogDuration() / 1e6,
+//            mReleaseFps.getMaxDuration() / 1e6,
+//            mReleaseFps.getMinDuration() / 1e6);
+//    }
+
+    // update dump buffer
+    mDump->onReleaseBuffer(buf);
+#endif
     return NO_ERROR;
 }
 
 status_t BufferQueue::consumerConnect(const sp<IConsumerListener>& consumerListener,
         bool controlledByApp) {
+#ifdef MTK_MT6589
+    // check if local or remote connection by the consumer listener
+    // (in most cases, consumer side is a local connection)
+    mConsumerPid = (NULL != consumerListener->asBinder()->localBinder())
+                 ? getpid()
+                 : IPCThreadState::self()->getCallingPid();
+
+    String8 name;
+//    if (NO_ERROR == getProcessName(mConsumerPid, name)) {
+//        ST_LOGI("consumerConnect consumer=(%d:%s) controlledByApp=%s",
+//            mConsumerPid, name.string(), controlledByApp ? "true" : "false");
+//    } else {
+//        ST_LOGI("consumerConnect consumer=(%d:\?\?\?) controlledByApp=%s",
+//            mConsumerPid, controlledByApp ? "true" : "false");
+//    }
+#else
     ST_LOGV("consumerConnect controlledByApp=%s",
             controlledByApp ? "true" : "false");
+#endif
     Mutex::Autolock lock(mMutex);
 
     if (mAbandoned) {
@@ -1100,6 +1295,9 @@ status_t BufferQueue::consumerConnect(const sp<IConsumerListener>& consumerListe
 }
 
 status_t BufferQueue::consumerDisconnect() {
+#ifdef MTK_MT6589
+    mConsumerPid = -1;
+#endif
     ST_LOGV("consumerDisconnect");
     Mutex::Autolock lock(mMutex);
 

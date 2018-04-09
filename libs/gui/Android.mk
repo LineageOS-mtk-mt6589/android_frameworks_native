@@ -39,6 +39,23 @@ LOCAL_SHARED_LIBRARIES := \
 	libutils \
 	liblog
 
+ifeq ($(TARGET_BOARD_PLATFORM), mt6589)
+MTK_PATH = ../../../../mediatek/frameworks-ext/native/libs/gui
+
+LOCAL_SRC_FILES += \
+	$(MTK_PATH)/BufferQueue.cpp \
+	$(MTK_PATH)/FpsCounter.cpp
+
+    LOCAL_CFLAGS := -DLOG_TAG=\"GLConsumer\"
+	LOCAL_CFLAGS += -DUSE_DP
+	LOCAL_SHARED_LIBRARIES += libdpframework libhardware
+	LOCAL_STATIC_LIBRARIES += libgralloc_extra
+	LOCAL_SRC_FILES += $(MTK_PATH)/BufferQueueDump.cpp
+	LOCAL_C_INCLUDES += \
+		$(TOP)/mediatek/hardware/dpframework/inc \
+		$(TOP)/mediatek/hardware/gralloc_extra/include
+endif
+
 # Executed only on QCOM BSPs
 ifeq ($(TARGET_USES_QCOM_BSP),true)
 ifneq ($(TARGET_QCOM_DISPLAY_VARIANT),)

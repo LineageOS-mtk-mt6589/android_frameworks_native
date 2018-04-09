@@ -46,6 +46,9 @@ class ISurfaceComposerClient;
 class IGraphicBufferProducer;
 class Region;
 
+#ifdef MTK_MT6589
+class DisplayInfoEx;
+#endif
 // ---------------------------------------------------------------------------
 
 class SurfaceComposerClient : public RefBase
@@ -168,6 +171,13 @@ private:
                 status_t                    mStatus;
                 sp<ISurfaceComposerClient>  mClient;
                 Composer&                   mComposer;
+#ifdef MTK_MT6589
+public:
+    static status_t getDisplayInfoEx(const sp<IBinder>& display, DisplayInfoEx* info);
+
+    // setting extra surface flags
+    status_t    setFlagsEx(const sp<IBinder>& id, uint32_t flags, uint32_t mask);
+#endif
 };
 
 // ---------------------------------------------------------------------------

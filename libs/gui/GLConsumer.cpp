@@ -44,14 +44,25 @@
 EGLAPI const char* eglQueryStringImplementationANDROID(EGLDisplay dpy, EGLint name);
 #define CROP_EXT_STR "EGL_ANDROID_image_crop"
 
+#ifdef MTK_MT6589
+#include <cutils/properties.h>
+#endif
 namespace android {
 
 // Macros for including the GLConsumer name in log messages
+#ifdef MTK_MT6589
+#define ST_LOGV(x, ...) ALOGV("[%s](this:%p,api:%d) "x, mName.string(), this, getConnectedApi(), ##__VA_ARGS__)
+#define ST_LOGD(x, ...) ALOGD("[%s](this:%p,api:%d) "x, mName.string(), this, getConnectedApi(), ##__VA_ARGS__)
+#define ST_LOGI(x, ...) ALOGI("[%s](this:%p,api:%d) "x, mName.string(), this, getConnectedApi(), ##__VA_ARGS__)
+#define ST_LOGW(x, ...) ALOGW("[%s](this:%p,api:%d) "x, mName.string(), this, getConnectedApi(), ##__VA_ARGS__)
+#define ST_LOGE(x, ...) ALOGE("[%s](this:%p,api:%d) "x, mName.string(), this, getConnectedApi(), ##__VA_ARGS__)
+#else
 #define ST_LOGV(x, ...) ALOGV("[%s] "x, mName.string(), ##__VA_ARGS__)
 #define ST_LOGD(x, ...) ALOGD("[%s] "x, mName.string(), ##__VA_ARGS__)
 #define ST_LOGI(x, ...) ALOGI("[%s] "x, mName.string(), ##__VA_ARGS__)
 #define ST_LOGW(x, ...) ALOGW("[%s] "x, mName.string(), ##__VA_ARGS__)
 #define ST_LOGE(x, ...) ALOGE("[%s] "x, mName.string(), ##__VA_ARGS__)
+#endif
 
 static const struct {
     size_t width, height;
@@ -367,6 +378,10 @@ status_t GLConsumer::updateAndReleaseLocked(const BufferQueue::BufferItem& item)
 
     int buf = item.mBuf;
 
+#ifdef MTK_MT6589
+    // do not create EGLImage if secure buffer
+    if (!(mSlots[buf].mGraphicBuffer->getUsage() & GRALLOC_USAGE_SECURE)) {
+#endif
     // If the mEglSlot entry is empty, create an EGLImage for the gralloc
     // buffer currently in the slot in ConsumerBase.
     //
@@ -387,6 +402,9 @@ status_t GLConsumer::updateAndReleaseLocked(const BufferQueue::BufferItem& item)
         mEglSlots[buf].mEglImage = image;
         mEglSlots[buf].mCropRect = item.mCrop;
     }
+#ifdef MTK_MT6589
+    }
+#endif
 
     // Do whatever sync ops we need to do before releasing the old slot.
     err = syncForReleaseLocked(mEglDisplay);
@@ -447,6 +465,10 @@ status_t GLConsumer::bindTextureImageLocked() {
         ST_LOGW("bindTextureImage: clearing GL error: %#04x", error);
     }
 
+#ifdef MTK_MT6589
+    // do not bind texture if secure buffer
+    if (!(mCurrentTextureBuf->getUsage() & GRALLOC_USAGE_SECURE)) {
+#endif
     glBindTexture(mTexTarget, mTexName);
     if (mCurrentTexture == BufferQueue::INVALID_BUFFER_SLOT) {
         if (mCurrentTextureBuf == NULL) {
@@ -468,6 +490,9 @@ status_t GLConsumer::bindTextureImageLocked() {
             return UNKNOWN_ERROR;
         }
     }
+#ifdef MTK_MT6589
+    }
+#endif
 
     // Wait for the new buffer to be ready.
     return doGLFenceWaitLocked();

@@ -451,6 +451,14 @@ private:
     // mReleasedTexImageBuffer is a dummy buffer used when in single buffer
     // mode and releaseTexImage() has been called
     static sp<GraphicBuffer> sReleasedTexImageBuffer;
+#ifdef MTK_MT6589
+public:
+    // get connected api type for debug purpose
+    int getConnectedApi() const { return (mConsumer != NULL) ? mConsumer->getConnectedApi() : -1; }
+
+    // need to use destructor for its own buffer release
+    ~GLConsumer() { abandon(); };
+#endif
 };
 
 // ----------------------------------------------------------------------------

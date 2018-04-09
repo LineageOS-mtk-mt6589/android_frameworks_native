@@ -178,6 +178,10 @@ public:
     static void closeGlobalTransaction(bool synchronous) {
         Composer::getInstance().closeGlobalTransactionImpl(synchronous);
     }
+#ifdef MTK_MT6589
+    status_t setFlagsEx(const sp<SurfaceComposerClient>& client, const sp<IBinder>& id,
+            uint32_t flags, uint32_t mask);
+#endif
 };
 
 ANDROID_SINGLETON_STATIC_INSTANCE(Composer);
@@ -242,8 +246,13 @@ void Composer::closeGlobalTransactionImpl(bool synchronous) {
 }
 
 void Composer::setAnimationTransactionImpl() {
+#ifdef MTK_MT6589
+    // remove aniamtion transaction here
+    // since it forces into sync mode transaction, and may block WMS in some gui cases
+#else
     Mutex::Autolock _l(mLock);
     mAnimation = true;
+#endif
 }
 
 layer_state_t* Composer::getLayerStateLocked(
@@ -429,6 +438,22 @@ status_t Composer::setOrientation(int orientation) {
     mForceSynchronous = true; // TODO: do we actually still need this?
     return NO_ERROR;
 }
+
+#ifdef MTK_MT6589
+status_t Composer::setFlagsEx(const sp<SurfaceComposerClient>& client,
+        const sp<IBinder>& id, uint32_t flags,
+        uint32_t mask) {
+    Mutex::Autolock _l(mLock);
+    layer_state_t* s = getLayerStateLocked(client, id);
+    if (!s)
+        return BAD_INDEX;
+    s->what |= layer_state_t::eVisibilityChanged;
+    s->flagsEx &= ~mask;
+    s->flagsEx |= (flags & mask);
+    s->maskEx |= mask;
+    return NO_ERROR;
+}
+#endif
 
 // ---------------------------------------------------------------------------
 
@@ -640,6 +665,12 @@ void SurfaceComposerClient::setDisplayProjection(const sp<IBinder>& token,
             layerStackRect, displayRect);
 }
 
+#ifdef MTK_MT6589
+status_t SurfaceComposerClient::setFlagsEx(const sp<IBinder>& id, uint32_t flags,
+        uint32_t mask) {
+    return getComposer().setFlagsEx(this, id, flags, mask);
+}
+#endif
 // ----------------------------------------------------------------------------
 
 status_t SurfaceComposerClient::getDisplayInfo(
@@ -655,6 +686,14 @@ void SurfaceComposerClient::blankDisplay(const sp<IBinder>& token) {
 void SurfaceComposerClient::unblankDisplay(const sp<IBinder>& token) {
     ComposerService::getComposerService()->unblank(token);
 }
+
+#ifdef MTK_MT6589
+status_t SurfaceComposerClient::getDisplayInfoEx(
+        const sp<IBinder>& display, DisplayInfoEx* info)
+{
+    return ComposerService::getComposerService()->getDisplayInfoEx(display, info);
+}
+#endif
 
 // TODO: Remove me.  Do not use.
 // This is a compatibility shim for one product whose drivers are depending on
