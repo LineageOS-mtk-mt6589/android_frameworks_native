@@ -48,6 +48,11 @@ enum {
     DISPLAY_ORIENTATION_270 = 3
 };
 
+#ifdef MTK_MT6589
+struct DisplayInfoEx {
+    uint8_t subtype;
+};
+#endif
 }; // namespace android
 
 #endif // ANDROID_COMPOSER_DISPLAY_INFO_H

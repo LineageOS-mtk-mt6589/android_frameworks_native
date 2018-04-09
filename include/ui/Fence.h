@@ -110,6 +110,10 @@ private:
     const Fence& operator = (const Fence& rhs) const;
 
     int mFenceFd;
+#ifdef MTK_MT6589
+private:
+    void dump(int fd, const char* logname, unsigned int warningTimeout);
+#endif
 };
 
 }; // namespace android
